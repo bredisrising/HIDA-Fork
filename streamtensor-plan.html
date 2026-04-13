@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StreamTensor Implementation Plan</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+    --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --accent: #58a6ff; --green: #3fb950; --yellow: #d29922;
+    --red: #f85149; --purple: #bc8cff; --orange: #ffa657;
+    --teal: #39d353; --code-bg: #1f2937;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.7; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 2.2em; color: var(--accent); border-bottom: 2px solid var(--border); padding-bottom: 16px; margin-bottom: 32px; }
+  h2 { font-size: 1.6em; color: var(--purple); margin: 48px 0 20px; border-left: 4px solid var(--purple); padding-left: 14px; }
+  h3 { font-size: 1.2em; color: var(--orange); margin: 32px 0 12px; }
+  h4 { font-size: 1em; color: var(--yellow); margin: 20px 0 8px; }
+  p { margin-bottom: 12px; color: var(--text); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85em; background: var(--code-bg); color: var(--orange); padding: 2px 6px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px; overflow-x: auto; margin: 16px 0; }
+  pre code { background: none; color: var(--text); padding: 0; font-size: 0.88em; }
+  .keyword { color: var(--purple); }
+  .type-color { color: var(--teal); }
+  .comment { color: var(--muted); font-style: italic; }
+  .string { color: var(--green); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9em; }
+  th { background: var(--bg3); color: var(--accent); text-align: left; padding: 10px 14px; border: 1px solid var(--border); }
+  td { padding: 9px 14px; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg2); }
+  .callout { border-radius: 8px; padding: 16px 20px; margin: 16px 0; border-left: 4px solid; }
+  .callout.info { background: #0d2137; border-color: var(--accent); }
+  .callout.warn { background: #2b1d0e; border-color: var(--yellow); }
+  .callout.danger { background: #2d0f0f; border-color: var(--red); }
+  .callout.success { background: #0d2b0d; border-color: var(--green); }
+  .callout .label { font-weight: 700; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .callout.info .label { color: var(--accent); }
+  .callout.warn .label { color: var(--yellow); }
+  .callout.danger .label { color: var(--red); }
+  .callout.success .label { color: var(--green); }
+  .phase-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin: 20px 0; }
+  .phase-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .phase-num { background: var(--accent); color: #000; font-weight: 700; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .toc { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 40px; }
+  .toc h3 { color: var(--accent); margin-top: 0; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin: 6px 0; }
+  .toc a { color: var(--muted); }
+  .toc a:hover { color: var(--accent); }
+  .concept-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin: 16px 0; }
+  .concept-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+  .concept-card h4 { color: var(--teal); margin-top: 0; }
+  ul, ol { padding-left: 24px; margin-bottom: 12px; }
+  li { margin: 4px 0; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 600; }
+  .tag.new { background: #0d2b0d; color: var(--green); border: 1px solid var(--green); }
+  .tag.mod { background: #2b1d0e; color: var(--yellow); border: 1px solid var(--yellow); }
+  .tag.reuse { background: #0d1e37; color: var(--accent); border: 1px solid var(--accent); }
+  .dep-diagram { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; font-family: monospace; font-size: 0.9em; color: var(--teal); white-space: pre; overflow-x: auto; margin: 16px 0; }
+  details { border: 1px solid var(--border); border-radius: 8px; margin: 8px 0; }
+  summary { padding: 12px 16px; cursor: pointer; color: var(--accent); font-weight: 600; background: var(--bg2); border-radius: 8px; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: '▶ '; font-size: 0.75em; }
+  details[open] summary::before { content: '▼ '; }
+  details[open] { padding-bottom: 16px; }
+  details > *:not(summary) { padding: 0 16px; }
+  .file-ref { color: var(--teal); font-family: monospace; font-size: 0.88em; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>StreamTensor Implementation Plan</h1>
+<p style="color:var(--muted)">Building StreamTensor (MICRO '25) on top of HIDA (ASPLOS '24) — both from Hanchen Ye &amp; Deming Chen, UIUC</p>
+
+<div class="toc">
+  <h3>Table of Contents</h3>
+  <ol>
+    <li><a href="#concepts">Part 0: Core Concepts You Must Understand</a></li>
+    <li><a href="#hida">Part 1: How HIDA Works</a></li>
+    <li><a href="#improvements">Part 2: How StreamTensor Improves on HIDA</a></li>
+    <li><a href="#impl">Part 3: Implementation Plan (9 Phases)</a></li>
+    <li><a href="#obstacles">Potential Obstacles &amp; Mitigations</a></li>
+    <li><a href="#files">Files Summary</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="concepts">Part 0: Core Concepts You Must Understand</h2>
+
+<div class="callout info">
+  <div class="label">Why this section exists</div>
+  These are the foundational building blocks. Without internalizing them, the implementation steps in Part 3 will feel arbitrary. Read this before touching any code.
+</div>
+
+<!-- ---- MLIR ---- -->
+<h3>0.1 MLIR Fundamentals</h3>
+<p>MLIR (Multi-Level Intermediate Representation) is a compiler infrastructure framework from Google/LLVM that lets you define and compose multiple IRs in a single framework. Both HIDA and StreamTensor are MLIR-based compilers.</p>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>Operations (Op)</h4>
+    <p>The fundamental unit of computation. Every instruction is an Op. An Op has:</p>
+    <ul>
+      <li><strong>Operands</strong> — input SSA values</li>
+      <li><strong>Results</strong> — output SSA values</li>
+      <li><strong>Attributes</strong> — compile-time constants (integers, strings, arrays, affine maps, types)</li>
+      <li><strong>Regions</strong> — nested code (0 or more)</li>
+      <li><strong>Successors</strong> — CFG successors (rarely used in dataflow IRs)</li>
+    </ul>
+    <pre><code><span class="comment">// Example: a simple add op</span>
+%result = arith.addi %a, %b : i32
+<span class="comment">// Operands: %a, %b   Results: %result   Attr: none</span></code></pre>
+  </div>
+  <div class="concept-card">
+    <h4>Values and SSA</h4>
+    <p>MLIR uses Static Single Assignment form. Every value is defined exactly once and may be used many times. Values come from:</p>
+    <ul>
+      <li><strong>Op results</strong> — <code>%x = some.op</code></li>
+      <li><strong>Block arguments</strong> — function/loop arguments</li>
+    </ul>
+    <p>SSA means you cannot "reassign" — you always create new values. This is what makes optimization analysis easy.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Regions, Blocks, and Terminators</h4>
+    <p>A <strong>Region</strong> is a list of basic blocks. A <strong>Block</strong> is a list of ops ending with a <strong>terminator</strong> (like <code>return</code>, <code>yield</code>, <code>br</code>). Regions can be:</p>
+    <ul>
+      <li><strong>Isolated from above</strong> — cannot reference values from outer scopes (like a function body)</li>
+      <li><strong>Transparent (not isolated)</strong> — can capture values from outer scope (like a loop body)</li>
+    </ul>
+    <p><code>KernelOp</code> will be <em>IsolatedFromAbove</em>. <code>STTaskOp</code> will be <em>transparent</em>.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Types</h4>
+    <p>Every SSA value has a type. Built-in types include <code>i32</code>, <code>f32</code>, <code>index</code>. Dialects define custom types like:</p>
+    <ul>
+      <li><code>memref&lt;4x8xf32&gt;</code> — typed buffer with layout</li>
+      <li><code>tensor&lt;4x8xf32&gt;</code> — immutable tensor value</li>
+      <li><code>hls.stream&lt;f32, 4&gt;</code> — HIDA FIFO channel</li>
+      <li><code>hls.itensor&lt;...&gt;</code> — StreamTensor's new type</li>
+    </ul>
+  </div>
+  <div class="concept-card">
+    <h4>Attributes</h4>
+    <p>Attributes are compile-time data attached to ops. They are <em>not</em> SSA values. Examples:</p>
+    <ul>
+      <li><code>depth = 4 : i64</code></li>
+      <li><code>affine_map&lt;(d0,d1) -&gt; (d0*16+d1)&gt;</code></li>
+      <li><code>tile_sizes = [16, 16, 8]</code></li>
+    </ul>
+    <p>Custom attributes (like <code>KernelTimingAttr</code>) are defined in TableGen and hold structured compile-time data.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Dialects</h4>
+    <p>A dialect is a namespace grouping related ops, types, and attributes. Dialects can call into each other. The compiler pipeline lowers from high-level dialects to low-level dialects progressively:</p>
+    <pre><code>torch → linalg → affine
+  → memref → llvm</code></pre>
+    <p>HIDA/StreamTensor add the <code>hls</code> dialect as an intermediate level between Linalg and LLVM.</p>
+  </div>
+</div>
+
+<!-- ---- TableGen ---- -->
+<h3>0.2 TableGen — How Ops and Types Are Defined</h3>
+<p>TableGen is a domain-specific language that generates C++ boilerplate from declarative specifications. MLIR uses it for ops, types, attributes, interfaces, and passes.</p>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>Defining an Op</h4>
+    <pre><code><span class="keyword">def</span> MyOp : HLS_Op&lt;<span class="string">"my_op"</span>,
+    [Pure, SameOperandsAndResultType]&gt; {
+  <span class="keyword">let</span> summary = <span class="string">"Does something"</span>;
+  <span class="keyword">let</span> arguments = (ins
+    AnyType:$input,
+    I64Attr:$factor
+  );
+  <span class="keyword">let</span> results = (outs AnyType:$output);
+  <span class="keyword">let</span> assemblyFormat =
+    <span class="string">"$input attr-dict `:` type($output)"</span>;
+  <span class="keyword">let</span> hasVerifier = 1;
+  <span class="keyword">let</span> hasFolder = 1;
+}</code></pre>
+  </div>
+  <div class="concept-card">
+    <h4>Defining a Type</h4>
+    <pre><code><span class="keyword">def</span> StreamType : HLS_Type&lt;<span class="string">"Stream"</span>&gt; {
+  <span class="keyword">let</span> mnemonic = <span class="string">"stream"</span>;
+  <span class="keyword">let</span> parameters = (ins
+    <span class="string">"mlir::Type"</span>:$elementType,
+    <span class="string">"unsigned"</span>:$depth
+  );
+  <span class="keyword">let</span> assemblyFormat =
+    <span class="string">"`&lt;` $elementType `,` $depth `&gt;`"</span>;
+}</code></pre>
+    <p>For <code>ITensorType</code>, because it has an <code>AffineMap</code> parameter, you must set <code>hasCustomAssemblyFormat = 1</code> and implement <code>parse</code>/<code>print</code> manually in C++.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Traits</h4>
+    <p>Traits are reusable op properties checked at verification time:</p>
+    <ul>
+      <li><code>Pure</code> — no side effects</li>
+      <li><code>IsolatedFromAbove</code> — region can't capture outer values</li>
+      <li><code>SingleBlockImplicitTerminator&lt;"YieldOp"&gt;</code> — region has exactly one block that ends with YieldOp</li>
+      <li><code>SameOperandsAndResultType</code> — all types match</li>
+      <li><code>NoMemoryEffect</code> — doesn't read/write memory</li>
+    </ul>
+  </div>
+  <div class="concept-card">
+    <h4>Interfaces</h4>
+    <p>Interfaces define methods that multiple ops can implement. Key MLIR interfaces:</p>
+    <ul>
+      <li><code>MemoryEffectOpInterface</code> — declares read/write/alloc effects</li>
+      <li><code>InferTypeOpInterface</code> — op can infer its result types</li>
+      <li><code>RegionBranchOpInterface</code> — describes region control flow (needed for SSA live-in/live-out analysis)</li>
+    </ul>
+    <p><code>StageLikeInterface</code> in HIDA is a custom interface that TaskOp implements.</p>
+  </div>
+</div>
+
+<!-- ---- Affine Dialect ---- -->
+<h3>0.3 The Affine Dialect</h3>
+<p>The affine dialect represents loops and memory accesses with linear arithmetic constraints. This is critical because StreamTensor uses affine maps to describe iteration patterns in <code>ITensorType</code>.</p>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>AffineMap</h4>
+    <p>An <code>AffineMap</code> maps a tuple of dimension/symbol values to a tuple of results using affine (linear + constant) expressions:</p>
+    <pre><code><span class="comment">// (d0, d1)[s0] -> (d0 * s0 + d1, d0)</span>
+affine_map&lt;(d0, d1)[s0] -&gt;
+  (d0 * s0 + d1, d0)&gt;</code></pre>
+    <p>In <code>ITensorType</code>, the iteration map maps <em>iteration indices</em> → <em>data tensor dimensions</em>. Example: a row-major tile iteration over a 64×64 matrix with 16×16 tiles uses <code>affine_map&lt;(d0,d1) -&gt; (d0, d1)&gt;</code>.</p>
+  </div>
+  <div class="concept-card">
+    <h4>AffineForOp</h4>
+    <pre><code>affine.for %i = 0 to 64 step 16 {
+  affine.for %j = 0 to 64 step 16 {
+    <span class="comment">// body</span>
+  }
+}</code></pre>
+    <p>Key attributes: <code>lower_bound</code>, <code>upper_bound</code>, <code>step</code> — all affine expressions. Used to derive <code>tripcount = (ub - lb) / step</code> and <code>stepSize = step</code> for ITensorType inference.</p>
+  </div>
+  <div class="concept-card">
+    <h4>AffineMaps in Memref</h4>
+    <pre><code><span class="comment">// Default row-major layout</span>
+memref&lt;64x64xf32&gt;
+<span class="comment">// Custom strided layout</span>
+memref&lt;64x64xf32, strided&lt;[64,1]&gt;&gt;</code></pre>
+    <p>The pack transformation (tensor.pack) changes the affine map of the underlying memref to a tiled layout. Understanding this is essential for the <code>PackKernelInterfacePass</code>.</p>
+  </div>
+</div>
+
+<!-- ---- Linalg Dialect ---- -->
+<h3>0.4 The Linalg Dialect</h3>
+<p>Linalg represents structured computations over tensors/memrefs. HIDA and StreamTensor both start from Linalg after torch-mlir lowers PyTorch operations.</p>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>linalg.generic</h4>
+    <p>The most flexible Linalg op — a named loop nest with explicit indexing maps:</p>
+    <pre><code>linalg.generic {
+  indexing_maps = [
+    affine_map&lt;(m,n,k) -&gt; (m,k)&gt;,  <span class="comment">// A</span>
+    affine_map&lt;(m,n,k) -&gt; (k,n)&gt;,  <span class="comment">// B</span>
+    affine_map&lt;(m,n,k) -&gt; (m,n)&gt;   <span class="comment">// C</span>
+  ],
+  iterator_types = [
+    "parallel", "parallel", "reduction"
+  ]
+} ins(%A, %B) outs(%C) {
+  ^bb0(%a:f32, %b:f32, %c:f32):
+    %r = arith.mulf %a, %b
+    %s = arith.addf %r, %c
+    linalg.yield %s
+}</code></pre>
+    <p>This represents matrix multiply. The indexing maps tell the compiler which operand dimension maps to which loop dimension.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Tiling (scf.for + extract_slice)</h4>
+    <p>Linalg tiling decomposes a large computation into small tiles:</p>
+    <pre><code>scf.for %i = 0 to 64 step 16 {
+  scf.for %j = 0 to 64 step 16 {
+    %tile_in = tensor.extract_slice
+      %A[%i, 0][16, 64][1, 1]
+    %tile_out = linalg.matmul
+      ins(%tile_in, ...) outs(...)
+    %result = tensor.insert_slice
+      %tile_out into %C[%i, %j]...
+  }
+}</code></pre>
+    <p>The <code>ConvertLinalgToKernelPass</code> analyzes this pattern to infer <code>ITensorType</code> parameters from the <code>extract_slice</code>/<code>insert_slice</code> offsets and the loop bounds.</p>
+  </div>
+  <div class="concept-card">
+    <h4>tensor.pack / tensor.unpack</h4>
+    <p>Changes the physical layout of a tensor for better cache/memory performance:</p>
+    <pre><code><span class="comment">// 64x64 → 4x4x16x16 (tiled)</span>
+tensor.pack %src inner_dims_pos=[0,1]
+  inner_tiles=[16,16] into %dest
+  : tensor&lt;64x64xf32&gt;
+    -&gt; tensor&lt;4x4x16x16xf32&gt;</code></pre>
+    <p>StreamTensor's <code>PackKernelInterfacePass</code> inserts these around kernel boundaries. For static weight tensors, packing is folded at compile time (zero runtime cost).</p>
+  </div>
+</div>
+
+<!-- ---- SCF Dialect ---- -->
+<h3>0.5 SCF (Structured Control Flow) Dialect</h3>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>scf.for with iter_args</h4>
+    <p>The iter_args pattern is the same as <code>ITensorWriteOp</code>'s destination-carried semantics:</p>
+    <pre><code><span class="comment">// Loop carries a tensor value through iterations</span>
+%result = scf.for %i = 0 to 4
+    step 1 iter_args(%acc = %init)
+    -&gt; tensor&lt;4x4xf32&gt; {
+  %updated = some_op %acc, %i
+  scf.yield %updated
+}</code></pre>
+    <p>The <code>ITensorWriteOp</code> uses the same pattern: <code>%next = itensor_write %value into %prev_itensor</code>. Each write updates the "cursor" into the FIFO stream.</p>
+  </div>
+  <div class="concept-card">
+    <h4>scf.if / scf.while</h4>
+    <p>These appear in generated DMA and converter code. The ping-pong buffer switch (0→1→0→...) is implemented as:</p>
+    <pre><code>%pingpong = arith.remui %iter, %c2
+scf.if %pingpong {
+  <span class="comment">// write to buffer[0]</span>
+} else {
+  <span class="comment">// write to buffer[1]</span>
+}</code></pre>
+  </div>
+</div>
+
+<!-- ---- Bufferization ---- -->
+<h3>0.6 Bufferization — Tensors vs Memrefs</h3>
+
+<div class="callout warn">
+  <div class="label">Critical Concept</div>
+  Understanding the tensor/memref boundary is essential for Phase 5 (Lowering and Bufferization). Get this wrong and the IR will be invalid.
+</div>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>Tensor (value semantics)</h4>
+    <p><code>tensor&lt;4x4xf32&gt;</code> is an immutable value — like a mathematical array. Operations on tensors produce new tensors (SSA). Tensors <strong>do not have addresses</strong> — you can't take a pointer to them.</p>
+    <p>The compiler works with tensors at high-level stages for ease of analysis and transformation.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Memref (pointer semantics)</h4>
+    <p><code>memref&lt;4x4xf32&gt;</code> is a typed pointer with shape and layout metadata. Operations on memrefs have explicit read/write semantics. Memrefs <strong>have addresses</strong> — they correspond to actual memory allocations.</p>
+    <p>HLS C++ uses memrefs (mapped to arrays/pointers).</p>
+  </div>
+  <div class="concept-card">
+    <h4>One-Shot Bufferization</h4>
+    <p>MLIR's bufferization framework converts tensor ops to memref ops. It analyzes aliasing to determine when tensors can be updated in-place vs when a copy is needed.</p>
+    <p>HIDA calls <code>mlir::bufferization::runOneShotBufferize()</code>. StreamTensor's <code>BufferizeDataflowPass</code> extends this for <code>KernelOp</code> and <code>StreamBufferOp</code>.</p>
+    <p><strong>Key rule:</strong> After bufferization, no tensor ops should remain (except at boundaries explicitly handled).</p>
+  </div>
+  <div class="concept-card">
+    <h4>ITensor's Role</h4>
+    <p>ITensor sits between tensor and stream. It has value semantics (SSA-based destination passing) but represents a streaming FIFO (side-effecting communication).</p>
+    <p>The destination-carried pattern makes ITensor look functional even though it's actually a side-effecting FIFO push/pop. This is resolved during <code>LowerITensorToStreamPass</code>: destination-carried ops become imperative stream read/write calls.</p>
+  </div>
+</div>
+
+<!-- ---- HLS Concepts ---- -->
+<h3>0.7 HLS (High-Level Synthesis) Concepts</h3>
+<p>These are the hardware concepts that the compiler is targeting. You must understand what the generated pragmas mean.</p>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>Pipeline and II (Initiation Interval)</h4>
+    <p><strong>Pipelining</strong> means overlapping execution of successive loop iterations. <code>#pragma HLS PIPELINE II=1</code> tells Vitis HLS to schedule successive iterations to start 1 clock cycle apart.</p>
+    <p><strong>II=1</strong> is the best case: one new input consumed per cycle. <strong>II=2</strong> means throughput is halved. The LP FIFO sizing algorithm uses II values to compute token accumulation between kernels.</p>
+    <pre><code><span class="keyword">for</span> (int i = 0; i &lt; N; i++) {
+  <span class="comment">#pragma HLS PIPELINE II=1</span>
+  output[i] = compute(input[i]);
+}</code></pre>
+  </div>
+  <div class="concept-card">
+    <h4>Dataflow</h4>
+    <p><code>#pragma HLS DATAFLOW</code> enables task-level parallelism within a function. All sub-functions execute concurrently, communicating through HLS streams or ping-pong buffers.</p>
+    <pre><code><span class="keyword">void</span> top(...) {
+  <span class="comment">#pragma HLS DATAFLOW</span>
+  task_A(in, middle1);
+  task_B(middle1, middle2);
+  task_C(middle2, out);
+}
+<span class="comment">// A, B, C run in parallel pipeline</span></code></pre>
+    <p>This is what <code>KernelOp</code> maps to — the kernel becomes a top function with DATAFLOW pragma, and each <code>STTaskOp</code> becomes a sub-function call.</p>
+  </div>
+  <div class="concept-card">
+    <h4>HLS FIFO (hls::stream)</h4>
+    <p>Vitis HLS's <code>hls::stream&lt;T&gt;</code> is a FIFO channel between tasks. Properties:</p>
+    <ul>
+      <li><strong>Blocking read</strong> — reader stalls if FIFO empty</li>
+      <li><strong>Blocking write</strong> — writer stalls if FIFO full</li>
+      <li><strong>Depth</strong> — number of elements the FIFO can hold</li>
+    </ul>
+    <pre><code><span class="comment">#pragma HLS STREAM variable=s depth=4</span>
+hls::stream&lt;float&gt; s;</code></pre>
+    <p>Too small a depth → deadlock. Too large → wastes BRAM/URAM. LP FIFO sizing finds the minimum safe depth.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Initial Delay (D) and Pipeline II</h4>
+    <p>For a pipelined HLS function:</p>
+    <ul>
+      <li><strong>Initial Delay (D)</strong> — clock cycles before the first output is produced</li>
+      <li><strong>Pipeline II</strong> — steady-state cycles between successive outputs</li>
+      <li><strong>Total Latency</strong> — D + (N-1)*II for N iterations</li>
+    </ul>
+    <p>StreamTensor models token flow between kernels using these three numbers (extracted from Vitis HLS synthesis reports).</p>
+  </div>
+  <div class="concept-card">
+    <h4>AXI Interface</h4>
+    <p>AXI (Advanced eXtensible Interface) is the standard bus protocol for FPGA memory access:</p>
+    <ul>
+      <li><code>m_axi</code> — master AXI port, used by DMAs to read/write DDR/HBM memory</li>
+      <li><code>s_axilite</code> — slave AXI-Lite port for control/configuration (scalar arguments)</li>
+      <li><code>axis</code> — AXI-Stream port for streaming data between components</li>
+    </ul>
+    <pre><code><span class="comment">#pragma HLS INTERFACE m_axi port=weights</span>
+<span class="comment">#pragma HLS INTERFACE s_axilite port=return</span></code></pre>
+  </div>
+  <div class="concept-card">
+    <h4>Ping-Pong Buffering</h4>
+    <p>A technique to hide memory latency: while one buffer is being filled from DDR, the kernel reads from the other buffer. When the fill completes, they swap.</p>
+    <p>StreamTensor's <code>StreamBufferOp</code> (and <code>ITensorConverterOp</code>) implement this with depth=2 allocation. The DMA task and compute task are in a double-buffered producer-consumer relationship.</p>
+  </div>
+</div>
+
+<!-- ---- FPGA Concepts ---- -->
+<h3>0.8 FPGA Architecture Concepts</h3>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>BRAM and URAM</h4>
+    <p>On-chip memories on Xilinx FPGAs:</p>
+    <ul>
+      <li><strong>BRAM</strong> — 18Kb or 36Kb blocks, dual-port, 1-2 cycle read latency</li>
+      <li><strong>URAM</strong> — 288Kb blocks, single-port, higher density</li>
+    </ul>
+    <p>FIFOs with small depths use registers (FF). Larger FIFOs use BRAM/URAM. The LP solver tries to minimize total BRAM/URAM used by FIFOs while preventing deadlock.</p>
+  </div>
+  <div class="concept-card">
+    <h4>HBM (High Bandwidth Memory)</h4>
+    <p>AMD Alveo U55C has 16GB HBM with 32 pseudo-channels, each providing ~14 GB/s bandwidth. Total ~460 GB/s.</p>
+    <p>StreamTensor's DMA generation creates one m_axi port per HBM channel. The <code>GenerateConnectivityPass</code> assigns which tensor goes to which HBM channel.</p>
+  </div>
+  <div class="concept-card">
+    <h4>SLR (Super Logic Region)</h4>
+    <p>Alveo U55C has 2 SLRs connected by SLR crossing wires. Cross-SLR communication has extra latency (1-2 cycles). The ILP graph partitioner assigns tasks to SLRs to minimize cross-SLR communication while balancing resource usage.</p>
+  </div>
+  <div class="concept-card">
+    <h4>DSP48/DSP58</h4>
+    <p>Dedicated multiply-accumulate units on FPGAs. A single DSP58 can do one 27×18 multiply per cycle. Matrix multiply kernels consume many DSPs; the resource allocation space in DSE tracks DSP budget.</p>
+  </div>
+</div>
+
+<!-- ---- LP/ILP ---- -->
+<h3>0.9 Linear Programming (LP) and ILP</h3>
+<p>StreamTensor uses LP for FIFO sizing and ILP for graph partitioning. You do not need to be an LP expert, but you need to understand the formulation.</p>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>LP Basics</h4>
+    <p>A Linear Program has:</p>
+    <ul>
+      <li><strong>Variables</strong> — continuous real numbers (e.g., FIFO delay values)</li>
+      <li><strong>Objective</strong> — linear function to minimize/maximize</li>
+      <li><strong>Constraints</strong> — linear inequalities/equalities</li>
+    </ul>
+    <p>LP can be solved in polynomial time. We use GLPK (GNU Linear Programming Kit) as the solver, called from C++ via <code>glp_prob* prob = glp_create_prob()</code>.</p>
+  </div>
+  <div class="concept-card">
+    <h4>FIFO Sizing as LP</h4>
+    <p>Objective: minimize sum of FIFO depths (proxy for BRAM used).</p>
+    <p>Variables: <code>delay[i][j]</code> — the delay at edge (i→j) in the kernel graph.</p>
+    <p>Constraint: for every pair of kernels (u,v), the sum of delays on any path from u to v must be ≥ a threshold that prevents deadlock.</p>
+    <p>The FIFO depth is derived from the max tokens that can accumulate given the delay and the II ratio between producer and consumer.</p>
+  </div>
+  <div class="concept-card">
+    <h4>ILP for Graph Partitioning</h4>
+    <p>Integer Linear Program — same as LP but variables are constrained to integers (or binary 0/1). Used to assign tasks to SLRs.</p>
+    <ul>
+      <li>Binary variable <code>x[i][s]</code> = 1 if task i is on SLR s</li>
+      <li>Minimize: cross-SLR communication + resource imbalance</li>
+      <li>Constraint: each task assigned to exactly one SLR</li>
+    </ul>
+    <p>ILP is NP-hard in general but small instances (few dozen tasks) solve quickly with GLPK's branch-and-bound.</p>
+  </div>
+</div>
+
+<!-- ---- Pattern Rewriting ---- -->
+<h3>0.10 MLIR Pattern Rewriting</h3>
+<p>Most MLIR passes are implemented as collections of rewrite patterns applied to the IR.</p>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>RewritePattern</h4>
+    <pre><code><span class="keyword">struct</span> MyPattern
+    : OpRewritePattern&lt;linalg::GenericOp&gt; {
+  LogicalResult matchAndRewrite(
+    linalg::GenericOp op,
+    PatternRewriter &amp;rewriter) const override {
+    <span class="comment">// Check preconditions</span>
+    if (!isMatmul(op)) return failure();
+    <span class="comment">// Do the rewrite</span>
+    rewriter.replaceOpWithNewOp&lt;KernelOp&gt;(
+      op, ...);
+    return success();
+  }
+};</code></pre>
+  </div>
+  <div class="concept-card">
+    <h4>PatternRewriter API</h4>
+    <p>Key methods used in every pass:</p>
+    <ul>
+      <li><code>rewriter.replaceOpWithNewOp&lt;NewOp&gt;(old, args...)</code> — atomically replace</li>
+      <li><code>rewriter.eraseOp(op)</code> — delete with no replacement</li>
+      <li><code>rewriter.create&lt;NewOp&gt;(loc, args...)</code> — insert new op</li>
+      <li><code>rewriter.setInsertionPointAfter(op)</code> — control where new ops go</li>
+      <li><code>rewriter.inlineRegionBefore(src, dst, point)</code> — move regions</li>
+      <li><code>rewriter.mergeBlocks(from, into, args)</code> — merge basic blocks</li>
+    </ul>
+  </div>
+  <div class="concept-card">
+    <h4>Greedy Pattern Application</h4>
+    <p>Most passes use <code>applyPatternsAndFoldGreedily(region, patterns)</code> which repeatedly applies all matching patterns until no more apply (fixpoint). This handles cases where one rewrite enables another.</p>
+    <p>The kernel fusion pass (Algorithm 2) is <em>not</em> a pattern rewrite — it's a graph algorithm that runs once on the whole module. It uses the pass infrastructure directly, not the pattern rewriter.</p>
+  </div>
+</div>
+
+<!-- ---- Destination-Carried Semantics ---- -->
+<h3>0.11 Destination-Carried Semantics (Critical for ITensorWriteOp)</h3>
+
+<div class="callout info">
+  <div class="label">Key Design Pattern</div>
+  This is the most unusual aspect of ITensorType. It makes FIFO writes look functional even though they're side-effecting.
+</div>
+
+<pre><code><span class="comment">// The dest operand is a "token" representing the FIFO cursor position</span>
+<span class="comment">// Each write advances the cursor and returns the next position</span>
+%s0 = itensor_empty : !hls.itensor&lt;...&gt;           <span class="comment">// cursor at start</span>
+%s1 = itensor_write %tile0 into %s0               <span class="comment">// push tile0, cursor = 1</span>
+%s2 = itensor_write %tile1 into %s1               <span class="comment">// push tile1, cursor = 2</span>
+
+<span class="comment">// This is EXACTLY like scf.for iter_args:</span>
+%final = scf.for %i = 0 to N step 1
+    iter_args(%s_iter = %s0) -&gt; !hls.itensor&lt;...&gt; {
+  %tile = compute(...)
+  %s_next = itensor_write %tile into %s_iter
+  scf.yield %s_next
+}
+<span class="comment">// After lowering, each write becomes stream.write(%tile, %fifo)</span></code></pre>
+
+<p>Why this design? SSA form requires each value to be defined once. By making the "FIFO state" an SSA value, the compiler can track data flow through the FIFO using standard MLIR dominance/use-def analysis, enabling fusion, verification, and optimization without special-casing FIFOs.</p>
+
+<!-- ---- Optuna ---- -->
+<h3>0.12 Optuna and Bayesian Optimization for DSE</h3>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>What Optuna Does</h4>
+    <p>Optuna is a Python library for hyperparameter optimization. It uses Bayesian methods (TPE — Tree-structured Parzen Estimators) to find good hyperparameters in fewer trials than grid search.</p>
+    <pre><code><span class="keyword">import</span> optuna
+
+<span class="keyword">def</span> objective(trial):
+    tile = trial.suggest_int(<span class="string">"tile"</span>, 4, 64)
+    unroll = trial.suggest_int(<span class="string">"unroll"</span>, 1, 16)
+    latency = compile_and_estimate(tile, unroll)
+    <span class="keyword">return</span> latency
+
+study = optuna.create_study()
+study.optimize(objective, n_trials=100)</code></pre>
+  </div>
+  <div class="concept-card">
+    <h4>DSE Integration</h4>
+    <p>StreamTensor's DSE loop:</p>
+    <ol>
+      <li>Optuna proposes (tile_size, unroll_factor, Cmax)</li>
+      <li>Python calls C++ pipeline with these params</li>
+      <li>C++ runs passes up through LowerITensorToStream</li>
+      <li>Vendor HLS profiles each kernel (with caching)</li>
+      <li>LP solver computes FIFO sizes</li>
+      <li>Objective = estimated latency + resource penalty</li>
+      <li>Optuna updates its model and proposes next trial</li>
+    </ol>
+    <p>The critical insight: don't run full synthesis in the loop — just analytical estimates augmented by cached profiling data.</p>
+  </div>
+</div>
+
+<!-- ---- XRT ---- -->
+<h3>0.13 XRT (Xilinx Runtime) for Host Code</h3>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>XRT API Concepts</h4>
+    <pre><code><span class="comment">// Load the compiled kernel</span>
+xrt::device dev(0);
+xrt::xclbin xclbin(<span class="string">"kernel.xclbin"</span>);
+dev.register_xclbin(xclbin);
+xrt::kernel k(dev, xclbin.get_uuid(), <span class="string">"top"</span>);
+
+<span class="comment">// Buffer Object (BO) = DMA-able memory</span>
+xrt::bo bo_in(dev, N*<span class="keyword">sizeof</span>(float),
+              k.group_id(0));
+<span class="keyword">float</span>* data = bo_in.map&lt;<span class="keyword">float</span>*&gt;();
+<span class="comment">// Fill data... then sync to device</span>
+bo_in.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+
+<span class="comment">// Run kernel</span>
+<span class="keyword">auto</span> run = k(bo_in, bo_out, N);
+run.wait();</code></pre>
+  </div>
+  <div class="concept-card">
+    <h4>xclbin and v++ Linking</h4>
+    <p>The build flow:</p>
+    <ol>
+      <li>Vitis HLS compiles C++ → <code>.xo</code> (kernel object)</li>
+      <li><code>v++ --link</code> links <code>.xo</code> + <code>connectivity.cfg</code> → <code>.xclbin</code></li>
+      <li>Host C++ loads <code>.xclbin</code> via XRT at runtime</li>
+    </ol>
+    <p>The <code>connectivity.cfg</code> file (generated by <code>GenerateConnectivityPass</code>) maps kernel AXI ports to specific HBM channels. Getting this mapping right is critical for bandwidth.</p>
+  </div>
+</div>
+
+<!-- ---- StreamTensor-specific ---- -->
+<h3>0.14 StreamTensor-Specific Concepts</h3>
+
+<div class="concept-grid">
+  <div class="concept-card">
+    <h4>ITensorType Parameters</h4>
+    <p>The full type encodes the <em>streaming access pattern</em> of a tensor:</p>
+    <pre><code><span class="comment">// Reading 16x16 tiles from a 64x64 matrix</span>
+<span class="comment">// row-major, 4 rows × 4 cols of tiles</span>
+!hls.itensor&lt;
+  element_shape=[16,16],    <span class="comment">// tile size</span>
+  trip_counts=[4,4],        <span class="comment">// 4×4 iteration</span>
+  step_sizes=[1,1],         <span class="comment">// step=1 tile</span>
+  iter_map=affine_map&lt;(d0,d1)-&gt;(d0,d1)&gt;
+&gt;</code></pre>
+    <p><strong>Data shape</strong> = element_shape × trip_counts = 64×64. The <code>iter_map</code> says: iteration index (d0,d1) maps to data dimension (d0,d1) — i.e., row-first tile order.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Layout Compatibility</h4>
+    <p>Two itensors are <em>layout compatible</em> (can connect with a plain FIFO) iff they have the same element shape, same iteration space, and the same iter_map. If any of these differ, an <code>ITensorConverterOp</code> must be inserted.</p>
+    <p>Example: producer emits <code>itensor&lt;[16,16],[4,4],[1,1],(d0,d1)-&gt;(d0,d1)&gt;</code> (row-major tiles) but consumer expects column-major tiles. The converter does a buffer-based layout transformation.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Algorithm 1: Converter Buffer Size</h4>
+    <p>Given incompatible source and result itensor types, compute the minimum ping-pong buffer size for the converter:</p>
+    <ol>
+      <li>Find the longest shared prefix of the iteration space where element sizes and maps agree</li>
+      <li>The buffer holds <em>all data elements below the shared prefix</em></li>
+      <li>This is the smallest buffer that allows the converter to fully transform one "slice" before passing it on</li>
+    </ol>
+    <p>Returns: <code>(bufShape, beforeLoop)</code> — buffer shape and which loop level is shared.</p>
+  </div>
+  <div class="concept-card">
+    <h4>Algorithm 2: Greedy Kernel Fusion</h4>
+    <p>Fuses kernels to minimize off-chip communication, subject to on-chip memory budget Cmax:</p>
+    <ol>
+      <li>Process kernels in topological order</li>
+      <li>For each kernel n, find the nearest predecessor that can be fused with n (cost ≤ Cmax)</li>
+      <li>If found, merge n into that predecessor's fusion group</li>
+      <li>Otherwise create a new fusion group for n</li>
+    </ol>
+    <p>Each fusion group becomes one physical kernel function. Inter-group communication uses DMAs (off-chip). Intra-group communication uses FIFOs (on-chip).</p>
+  </div>
+  <div class="concept-card">
+    <h4>Token Flow Model</h4>
+    <p>The LP FIFO sizing models how tokens (tensor tiles) accumulate between two kernels with different IIs:</p>
+    <ul>
+      <li>If producer II &lt; consumer II: tokens accumulate (need larger FIFO)</li>
+      <li>If producer II &gt; consumer II: tokens drain (small FIFO OK)</li>
+      <li>The delay variable controls how long the consumer waits before starting, which determines peak token count</li>
+    </ul>
+    <p>The LP finds the minimum total delay (= minimum total FIFO depth) that prevents overflow/underflow on all paths simultaneously.</p>
+  </div>
+  <div class="concept-card">
+    <h4>KV Cache and Autoregressive Decoding</h4>
+    <p>For LLMs, the main challenge is the KV cache — previously computed keys and values that grow with each generated token. StreamTensor handles this by:</p>
+    <ul>
+      <li>Treating the transformer block as the compilation unit (not the full model)</li>
+      <li>Exposing KV cache as an external tensor argument that the host manages</li>
+      <li>The block is "triggered multiple times" (paper Section 6.1) — once per generated token</li>
+    </ul>
+  </div>
+</div>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="hida">Part 1: How HIDA Works</h2>
+
+<h3>1.1 Overview</h3>
+<p>HIDA (Hierarchical Dataflow Architecture) is an MLIR-based HLS compiler that transforms PyTorch models or C++ code into optimized dataflow architectures on FPGAs. The codebase lives at <span class="file-ref">/home/ankit/dev/insta_research/HIDA-Fork</span> and is built on the MLIR compiler infrastructure.</p>
+
+<h3>1.2 HIDA's Two-Level IR</h3>
+<p>HIDA models dataflow at two abstraction levels within a single <code>hls</code> dialect (<code>mlir::scalehls::hls</code>):</p>
+
+<table>
+  <tr><th>Level</th><th>Op</th><th>Role</th></tr>
+  <tr><td rowspan="3"><strong>Functional Dataflow</strong><br><em>(high-level, algorithm-oriented)</em></td><td><code>DispatchOp</code></td><td>Contains a graph of tasks to be dispatched in dataflow</td></tr>
+  <tr><td><code>TaskOp</code></td><td>Transparent region containing ops to execute; can be fused/split freely</td></tr>
+  <tr><td><code>YieldOp</code></td><td>Terminator returning results from dispatch/task</td></tr>
+  <tr><td rowspan="4"><strong>Structural Dataflow</strong><br><em>(low-level, microarchitecture-oriented)</em></td><td><code>ScheduleOp</code></td><td>Isolated region with scheduled nodes (counterpart of DispatchOp)</td></tr>
+  <tr><td><code>NodeOp</code></td><td>Isolated region with explicit I/O: inputs (read-only), outputs (written), params (scalars)</td></tr>
+  <tr><td><code>BufferOp</code></td><td>On-chip memory with configurable ping-pong depth</td></tr>
+  <tr><td><code>StreamOp</code></td><td>FIFO channel with <code>stream_read</code>/<code>stream_write</code> ops</td></tr>
+</table>
+
+<h3>1.3 HIDA Compilation Pipeline</h3>
+<p>The <code>hida-pytorch-pipeline</code> (<span class="file-ref">lib/Transforms/Passes.cpp:140</span>) proceeds in 14 stages:</p>
+
+<ol>
+  <li><strong>TOSA/Linalg optimization</strong> — elementwise fusion, dataflow creation from linalg patterns</li>
+  <li><strong>Bufferization</strong> — tensor IR → memref IR</li>
+  <li><strong>Linalg to Affine</strong> — linalg generics → affine loop nests</li>
+  <li><strong>Affine loop fusion</strong> — fuse producer-consumer loops</li>
+  <li><strong>Buffer placement</strong> — classify buffers as BRAM/DRAM based on size threshold</li>
+  <li><strong>Loop tiling</strong> — tile loops with configurable tile size</li>
+  <li><strong>Local buffer allocation</strong> — create tile-sized local buffers</li>
+  <li><strong>Affine loop dataflowing</strong> — create DispatchOp/TaskOp hierarchy from affine loops</li>
+  <li><strong>Lower dataflow</strong> — Functional (Task/Dispatch) → Structural (Node/Schedule/Buffer)</li>
+  <li><strong>Eliminate multi-producer/consumer</strong> — fix shared buffer violations</li>
+  <li><strong>Parallelize dataflow nodes</strong> — intensity-aware + connection-aware loop unrolling</li>
+  <li><strong>Memory optimization</strong> — reduce II, vectorize buffers</li>
+  <li><strong>Convert dataflow to func</strong> — nodes become sub-functions</li>
+  <li><strong>Directive generation</strong> — emit HLS pragmas, create AXI interfaces</li>
+</ol>
+
+<h3>1.4 Key HIDA Design Decisions (and their limitations)</h3>
+<table>
+  <tr><th>Design Decision</th><th>Limitation</th></tr>
+  <tr><td>Inter-task communication is memory-mapped: Tasks communicate through <code>BufferOp</code> (memref), not streams</td><td>Requires large on-chip BRAMs between tasks; no opportunity for streaming overlap</td></tr>
+  <tr><td>Only scalar values use <code>StreamOp</code></td><td>Cannot pipeline tensor-granularity communication</td></tr>
+  <tr><td><code>StreamType</code> is <code>hls.stream&lt;elementType, depth&gt;</code> — no layout/access-pattern metadata</td><td>Cannot check stream compatibility at type level; cannot auto-generate converters</td></tr>
+  <tr><td>Single-level tiling: All kernels tiled uniformly with <code>--loop-tile-size</code></td><td>Cannot express different tile sizes for different ops in the same model</td></tr>
+  <tr><td>Flat DSE: Intensity+Connection-aware parallelization</td><td>No multi-level design space; no fusion optimization; no LP FIFO sizing</td></tr>
+</table>
+
+<h3>1.5 Key Files Reference</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><span class="file-ref">include/scalehls/Dialect/HLS/HLSTypes.td</span></td><td>StreamType, AxiType, BundleType definitions</td></tr>
+  <tr><td><span class="file-ref">include/scalehls/Dialect/HLS/HLSOps.td</span></td><td>All 20+ operation definitions</td></tr>
+  <tr><td><span class="file-ref">include/scalehls/Dialect/HLS/HLSAttributes.td</span></td><td>MemoryKind, Partition, Tile, Timing attrs</td></tr>
+  <tr><td><span class="file-ref">lib/Dialect/HLS/HLS.cpp</span></td><td>Dialect impl, verifiers, canonicalizers (~54KB)</td></tr>
+  <tr><td><span class="file-ref">lib/Dialect/HLS/Utils.cpp</span></td><td>getConsumers/Producers, fuseOpsIntoTask, dispatchBlock</td></tr>
+  <tr><td><span class="file-ref">lib/Dialect/HLS/Analysis.cpp</span></td><td>ComplexityAnalysis, CorrelationAnalysis</td></tr>
+  <tr><td><span class="file-ref">lib/Transforms/Dataflow/</span></td><td>All dataflow transformation passes</td></tr>
+  <tr><td><span class="file-ref">lib/Transforms/Passes.cpp</span></td><td>Pipeline registration and orchestration</td></tr>
+  <tr><td><span class="file-ref">lib/Translation/EmitHLSCpp.cpp</span></td><td>MLIR → Vitis HLS C++ code generation</td></tr>
+</table>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="improvements">Part 2: How StreamTensor Improves on HIDA</h2>
+
+<h3>2.1 Improvement 1: ITensor Type System</h3>
+<p>HIDA uses standard <code>memref</code> between nodes. StreamTensor introduces <code>itensor</code> that encodes the full streaming access pattern at the type level. This enables the compiler to verify stream layout compatibility at type-check time and automatically insert layout converters when needed.</p>
+
+<h3>2.2 Improvement 2: Stream-Based Kernel Fusion</h3>
+<p>HIDA fuses tasks at the Linalg level (pattern matching). StreamTensor fuses at the dataflow kernel level using the <code>itensor</code> type. Any two adjacent kernels can be fused — if their communication layouts differ, a converter is automatically inserted. Algorithm 1 sizes the converter buffer, Algorithm 2 finds the optimal fusion grouping.</p>
+
+<h3>2.3 Improvement 3: Automatic DMA Generation</h3>
+<p>In HIDA, external memory interfaces are handled manually. StreamTensor's <code>KernelOp</code> has tensor I/O at its boundary. Conversions from tensor to itensor at the kernel boundary automatically become DMAs with ping-pong buffering and pack/widen transformations.</p>
+
+<h3>2.4 Improvement 4: LP-Based FIFO Sizing</h3>
+<p>HIDA uses fixed-depth buffers. StreamTensor models token production/consumption as piecewise linear functions, then solves an LP to minimize total FIFO area while preventing deadlock.</p>
+
+<h3>2.5 Improvement 5: Hierarchical DSE</h3>
+<p>Three nested design spaces: Linalg Tiling Space → Kernel Fusion Space → Resource Allocation Space. Searched via Optuna.</p>
+
+<h3>2.6 Improvement 6: LLM Support</h3>
+<p>HIDA targets CNNs (ResNet, MobileNet). StreamTensor targets LLMs (GPT-2, Qwen, Llama, Gemma) — fusing entire transformer blocks with all intermediate results streaming on-chip.</p>
+
+<h3>2.7 Summary: IR Differences</h3>
+<table>
+  <tr><th>Concept</th><th>HIDA</th><th>StreamTensor</th></tr>
+  <tr><td>Top-level structure</td><td><code>DispatchOp → TaskOp</code></td><td><code>KernelOp → STTaskOp</code></td></tr>
+  <tr><td>Structural level</td><td><code>ScheduleOp → NodeOp → BufferOp</code></td><td>Same (lowered from kernel)</td></tr>
+  <tr><td>Tensor communication</td><td><code>memref</code> through <code>BufferOp</code></td><td><code>itensor</code> through FIFOs</td></tr>
+  <tr><td>Stream type</td><td><code>hls.stream&lt;T, depth&gt;</code> (scalar)</td><td><code>itensor&lt;shape, iterspace, itermap&gt;</code> (tensor tiles)</td></tr>
+  <tr><td>Layout conversion</td><td>N/A</td><td><code>ITensorConverterOp</code> with ping-pong buffer</td></tr>
+  <tr><td>DMA</td><td>Implicit via buffer placement heuristics</td><td>Explicit via kernel boundary conversion</td></tr>
+  <tr><td>FIFO sizing</td><td>Fixed depth</td><td>LP-optimized</td></tr>
+</table>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="impl">Part 3: Implementation Plan</h2>
+
+<div class="dep-diagram">Phase 1 (ITensorType) ──→ Phase 2 (Operations) ──→ Phase 3 (Linalg-to-Kernel)
+                                                           │
+                                                           ▼
+                                                      Phase 4 (Kernel Fusion)
+                                                           │
+                                                           ▼
+                                                      Phase 5 (Lowering)
+                                                           │
+                                              ┌────────────┼────────────┐
+                                              ▼            ▼            ▼
+                                         Phase 6       Phase 7      Phase 8
+                                         (DSE)        (Emitter)    (Runtime)
+                                              └────────────┼────────────┘
+                                                           ▼
+                                                    Phase 9 (LLM + Testing)</div>
+
+<!-- PHASE 1 -->
+<div class="phase-box" id="phase1">
+  <div class="phase-header">
+    <div class="phase-num">1</div>
+    <h3 style="margin:0;color:var(--teal)">ITensor Type System <span class="tag new">Foundation</span></h3>
+  </div>
+  <p><strong>Every subsequent phase depends on this.</strong></p>
+
+  <h4>Step 1.1: Define ITensorType in TableGen</h4>
+  <p><span class="file-ref">include/scalehls/Dialect/HLS/HLSTypes.td</span> — add after existing types</p>
+  <pre><code><span class="keyword">def</span> ITensorType : HLS_Type&lt;<span class="string">"ITensor"</span>, [
+    <span class="type-color">DeclareTypeInterfaceMethods</span>&lt;ITensorOpInterface&gt;]&gt; {
+  <span class="keyword">let</span> mnemonic = <span class="string">"itensor"</span>;
+  <span class="keyword">let</span> parameters = (ins
+    <span class="string">"mlir::Type"</span>:$elementType,
+    ArrayRefParameter&lt;<span class="string">"int64_t"</span>&gt;:$elementShape,
+    ArrayRefParameter&lt;<span class="string">"int64_t"</span>&gt;:$iterTripCounts,
+    ArrayRefParameter&lt;<span class="string">"int64_t"</span>&gt;:$iterStepSizes,
+    <span class="string">"mlir::AffineMap"</span>:$iterMap
+  );
+  <span class="comment">// Must be manual because AffineMap cannot use assemblyFormat</span>
+  <span class="keyword">let</span> hasCustomAssemblyFormat = 1;
+}</code></pre>
+
+  <h4>Utility methods to add to the type class in <span class="file-ref">lib/Dialect/HLS/HLS.cpp</span></h4>
+  <ul>
+    <li><code>getIterRank()</code> — returns <code>iterTripCounts.size()</code></li>
+    <li><code>getElementRank()</code> — returns <code>elementShape.size()</code></li>
+    <li><code>getDataShape()</code> — compute full data shape (element_shape[i] × trip_counts[i])</li>
+    <li><code>getTotalElements()</code> — product of all trip counts</li>
+    <li><code>isLayoutCompatible(ITensorType other)</code> — compare all fields for direct FIFO connection</li>
+    <li><code>parse(AsmParser&amp;)</code> / <code>print(AsmPrinter&amp;)</code> — custom assembly format</li>
+  </ul>
+
+  <h4>Verification logic (in <code>verify()</code>)</h4>
+  <ul>
+    <li><code>iterTripCounts.size() == iterStepSizes.size()</code></li>
+    <li><code>iterMap.getNumInputs() == iterTripCounts.size()</code></li>
+    <li><code>iterMap.getNumResults() == elementShape.size()</code></li>
+  </ul>
+
+  <h4>Step 1.2: Supporting Attributes</h4>
+  <p><span class="file-ref">include/scalehls/Dialect/HLS/HLSAttributes.td</span></p>
+  <ul>
+    <li><code>KernelTimingAttr</code> — <code>{pipelineII: i64, initialDelay: i64, totalLatency: i64}</code> — from vendor HLS profiling</li>
+    <li><code>FIFOSizingResultAttr</code> — <code>{depth: i64, maxTokens: i64}</code> — from LP solver</li>
+  </ul>
+
+  <h4>Step 1.3: Test</h4>
+  <p>Write <span class="file-ref">test/StreamTensor/Dialect/itensor-type-roundtrip.mlir</span> to verify parsing/printing roundtrips. Run with <code>scalehls-opt %s | scalehls-opt | FileCheck %s</code>.</p>
+
+  <div class="callout warn">
+    <div class="label">Obstacle: AffineMap in Type Parameter</div>
+    MLIR's TableGen cannot auto-generate assembly format when a parameter is <code>AffineMap</code>. You must implement <code>ITensorType::parse()</code> and <code>ITensorType::print()</code> manually in C++. Study how <code>mlir::MemRefType</code> handles its layout map parameter in MLIR's upstream <span class="file-ref">mlir/lib/IR/BuiltinTypes.cpp</span> for reference.
+  </div>
+</div>
+
+<!-- PHASE 2 -->
+<div class="phase-box" id="phase2">
+  <div class="phase-header">
+    <div class="phase-num">2</div>
+    <h3 style="margin:0;color:var(--teal)">ITensor and Structure Operations</h3>
+  </div>
+  <p>All new ops coexist with existing Dispatch/Task/Node/Schedule ops.</p>
+
+  <h4>Step 2.1: Structure Operations</h4>
+  <p><span class="file-ref">include/scalehls/Dialect/HLS/HLSOps.td</span></p>
+  <table>
+    <tr><th>Op</th><th>Traits</th><th>Arguments</th><th>Results</th><th>Notes</th></tr>
+    <tr><td><code>KernelOp</code></td><td><code>IsolatedFromAbove</code></td><td><code>Variadic&lt;TensorType&gt;</code></td><td><code>Variadic&lt;TensorType&gt;</code></td><td>Body args have ITensorType (implicit DMA at boundary)</td></tr>
+    <tr><td><code>STTaskOp</code></td><td><code>SingleBlockImplicitTerminator&lt;"STYieldOp"&gt;</code>, transparent</td><td>inits: variadic ITensorType (destinations)</td><td>variadic ITensorType</td><td>Destination-carried semantics</td></tr>
+    <tr><td><code>STYieldOp</code></td><td>Terminator</td><td>variadic</td><td>none</td><td>Terminates KernelOp and STTaskOp regions</td></tr>
+  </table>
+
+  <h4>Step 2.2: ITensor Operations (Table 1 of paper)</h4>
+  <table>
+    <tr><th>Op</th><th>Key Details</th></tr>
+    <tr><td><code>ITensorEmptyOp</code></td><td>No operands, returns <code>ITensorType</code>. Placeholder (no FIFO backing).</td></tr>
+    <tr><td><code>ITensorInstanceOp</code></td><td>No operands, returns <code>ITensorType</code>. Creates a concrete FIFO.</td></tr>
+    <tr><td><code>ITensorReadOp</code></td><td>source: ITensorType, init: TensorType → tensor. Pulls one tile from FIFO.</td></tr>
+    <tr><td><code>ITensorWriteOp</code></td><td>value: TensorType, dest: ITensorType → ITensorType. Destination-carried push.</td></tr>
+    <tr><td><code>ITensorCastOp</code></td><td>Source → result ITensorType cast (no layout change).</td></tr>
+    <tr><td><code>ITensorReassociateOp</code></td><td>Reassociate element shape/iteration dimensions. From tensor expand/collapse_shape.</td></tr>
+    <tr><td><code>ITensorConverterOp</code></td><td>Source → result layout conversion. Has ping-pong buffer size attribute (from Algorithm 1).</td></tr>
+    <tr><td><code>ITensorChunkOp</code></td><td>Split one itensor into variadic results along a dimension.</td></tr>
+    <tr><td><code>ITensorConcatOp</code></td><td>Join variadic itensors into one result.</td></tr>
+    <tr><td><code>ITensorForkOp</code></td><td>Broadcast one itensor to multiple identical consumers.</td></tr>
+    <tr><td><code>ITensorJoinOp</code></td><td>Round-robin join from multiple producers.</td></tr>
+  </table>
+
+  <h4>Step 2.3: Stream-Level Operations (Table 2 of paper)</h4>
+  <ul>
+    <li><code>StreamBufferOp</code> — ping-pong (double) buffer, distinct from <code>BufferOp</code></li>
+    <li><code>ITensorToStreamOp</code> / <code>StreamToITensorOp</code> — conversion bridge (eliminated during bufferization)</li>
+    <li><code>StreamCastOp</code> — stream type cast without layout change</li>
+  </ul>
+
+  <h4>Step 2.4: Update Visitor and Interfaces</h4>
+  <ul>
+    <li><span class="file-ref">include/scalehls/Dialect/HLS/Visitor.h</span> — add <code>HANDLE</code> macros for all new ops in the TypeSwitch</li>
+    <li><span class="file-ref">include/scalehls/Dialect/HLS/HLSInterfaces.td</span> — add <code>ITensorOpInterface</code></li>
+  </ul>
+
+  <div class="callout warn">
+    <div class="label">Obstacle: Destination-Carried Semantics Verification</div>
+    The verifier for <code>ITensorWriteOp</code> must ensure that itensor SSA values flow correctly — the result type must match the dest operand type, and within a loop the iter_arg must have matching type. Study how <code>tensor.insert_slice</code> verifies its destination operand in upstream MLIR.
+  </div>
+</div>
+
+<!-- PHASE 3 -->
+<div class="phase-box" id="phase3">
+  <div class="phase-header">
+    <div class="phase-num">3</div>
+    <h3 style="margin:0;color:var(--teal)">Linalg-to-Kernel Conversion Passes</h3>
+  </div>
+
+  <h4>Step 3.1: ConvertLinalgToKernelPass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/ConvertLinalgToKernel.cpp</span> <span class="tag new">NEW</span></p>
+  <p>Replaces <span class="file-ref">CreateDataflowFromLinalg.cpp</span> for the StreamTensor flow.</p>
+  <p><strong>Algorithm:</strong> For each tiled linalg op wrapped in <code>scf.for</code> with <code>extract_slice</code>/<code>insert_slice</code>:</p>
+  <ol>
+    <li>Analyze surrounding <code>scf.for</code> loops → extract tripCounts and stepSizes for ITensorType</li>
+    <li>Analyze <code>extract_slice</code>/<code>insert_slice</code> offsets → derive iterationMap and elementShape</li>
+    <li>Create <code>KernelOp</code> with tensor arguments; block args have <code>ITensorType</code></li>
+    <li>Replace <code>extract_slice</code> with <code>ITensorReadOp</code></li>
+    <li>Replace <code>insert_slice</code> with <code>ITensorWriteOp</code></li>
+    <li>Wrap the tiled computation loop nest in an <code>STTaskOp</code></li>
+  </ol>
+  <pre><code><span class="comment">// Key utility functions to implement:</span>
+ITensorType inferITensorType(
+    SmallVectorImpl&lt;scf::ForOp&gt; &amp;loopBand,
+    tensor::ExtractSliceOp extract);
+
+<span class="keyword">void</span> convertTiledLinalgToKernel(
+    scf::ForOp outerLoop,
+    linalg::GenericOp generic,
+    PatternRewriter &amp;rewriter);</code></pre>
+
+  <div class="callout warn">
+    <div class="label">Obstacle: Dynamic vs Static Offsets</div>
+    <code>tensor.extract_slice</code> may have dynamic offsets. Start by handling only the common case (static offsets proportional to loop IVs). Add dynamic support in a later iteration.
+  </div>
+
+  <h4>Step 3.2: ConvertTensorToKernelPass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/ConvertTensorToKernel.cpp</span> <span class="tag new">NEW</span></p>
+  <p>Handles non-linalg tensor ops (pad, collapse_shape, expand_shape, chunk, concat) between kernels → simple pass-through kernels.</p>
+
+  <h4>Step 3.3: PackKernelInterfacePass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/PackKernelInterface.cpp</span> <span class="tag new">NEW</span></p>
+  <ol>
+    <li>For each kernel, examine input/output tensor types</li>
+    <li>Insert <code>tensor.pack</code> before kernel to convert default layout → tiled layout</li>
+    <li>Insert <code>tensor.unpack</code> after kernel to convert back</li>
+    <li>For static tensors (weights): fold pack into tensor data (no runtime cost)</li>
+    <li>For dynamic tensors (activations): attempt to fold pack/unpack with neighboring kernels</li>
+  </ol>
+
+  <h4>Step 3.4: WidenKernelInterfacePass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/WidenKernelInterface.cpp</span> <span class="tag new">NEW</span></p>
+  <p>Widens tensor elements to vectors for maximum memory bandwidth. With 512-bit DDR/HBM and uint8 elements, groups 64 elements into <code>vector&lt;64xi8&gt;</code>. Updates <code>ITensorType</code> element shapes accordingly.</p>
+
+  <h4>Step 3.5: MaterializeKernelPass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/MaterializeKernel.cpp</span> <span class="tag new">NEW</span></p>
+  <p>Materializes the implicit DMA at kernel boundaries:</p>
+  <ol>
+    <li><strong>Input boundary:</strong> generate <code>scf.for</code> loop that loads from packed tensor → ping-pong buffer → pushes to FIFO via <code>ITensorWriteOp</code></li>
+    <li><strong>Output boundary:</strong> generate loop that pulls from FIFO → ping-pong buffer → writes to external memory</li>
+    <li>These DMA tasks are wrapped in <code>STTaskOp</code> within the kernel</li>
+    <li>After materialization: DMA-in tasks → compute tasks → DMA-out tasks</li>
+  </ol>
+
+  <h4>Step 3.6: Register All Passes</h4>
+  <ul>
+    <li><span class="file-ref">include/scalehls/Transforms/Passes.td</span> — add pass definitions with options <span class="tag mod">MODIFY</span></li>
+    <li><span class="file-ref">include/scalehls/Transforms/Passes.h</span> — add <code>createXxxPass()</code> factories <span class="tag mod">MODIFY</span></li>
+    <li><span class="file-ref">lib/Transforms/CMakeLists.txt</span> — add new .cpp files to build <span class="tag mod">MODIFY</span></li>
+  </ul>
+</div>
+
+<!-- PHASE 4 -->
+<div class="phase-box" id="phase4">
+  <div class="phase-header">
+    <div class="phase-num">4</div>
+    <h3 style="margin:0;color:var(--teal)">ITensor Optimization and Kernel Fusion</h3>
+  </div>
+
+  <h4>Step 4.1: FoldITensorPass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/FoldITensor.cpp</span> <span class="tag new">NEW</span></p>
+  <p>When an <code>ITensorWriteOp</code> connects to an <code>ITensorReadOp</code> with exactly matching access patterns: eliminate the FIFO and merge local buffers. Access pattern match = compare affine access maps analytically.</p>
+
+  <h4>Step 4.2: VectorizeITensorPass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/VectorizeITensor.cpp</span> <span class="tag new">NEW</span></p>
+  <ol>
+    <li>For each itensor FIFO, determine required bandwidth based on kernel parallelism</li>
+    <li>Vectorize: change element shape from <code>tensor&lt;16x16&gt;</code> to <code>vector&lt;2x4&gt;</code></li>
+    <li>Write side: <code>vector.transfer_read</code> from buffer → <code>ITensorWriteOp</code></li>
+    <li>Read side: <code>ITensorReadOp</code> → <code>vector.transfer_write</code> to buffer</li>
+    <li>Update <code>ITensorType</code> element shape</li>
+  </ol>
+
+  <h4>Step 4.3: EnsureITensorSingleUsePass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/EnsureITensorSingleUse.cpp</span> <span class="tag new">NEW</span></p>
+  <p>For each itensor value with multiple consumers: insert <code>ITensorForkOp</code> to create duplicated streams. Streaming equivalent of HIDA's <code>EliminateMultiConsumer</code>.</p>
+
+  <h4>Step 4.4: ConvertEmptyToInstancePass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/ConvertEmptyToInstance.cpp</span> <span class="tag new">NEW</span></p>
+  <p>Convert all <code>ITensorEmptyOp</code> (placeholder) to <code>ITensorInstanceOp</code> (concrete FIFO) after the itensor graph is finalized. Sets initial FIFO depths (will be LP-optimized in Phase 6).</p>
+
+  <h4>Step 4.5: SimplifyTaskStructurePass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/SimplifyTaskStructure.cpp</span> <span class="tag new">NEW</span></p>
+  <p>Clean up task hierarchy: merge adjacent tasks with compatible iteration spaces, remove empty tasks, inline single-op tasks.</p>
+
+  <h4>Step 4.6: StrategyMergeTaskPass (Kernel Fusion — Core Algorithm)</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/StrategyMergeTask.cpp</span> <span class="tag new">NEW</span></p>
+  <p><span class="file-ref">lib/Transforms/Dataflow/ITensorConverterUtils.cpp</span> <span class="tag new">NEW</span></p>
+
+  <details>
+    <summary>Algorithm 1 — Converter Buffer Size (ITensorConverterUtils.cpp)</summary>
+    <pre><code><span class="comment">// Input: src ITensorType, res ITensorType
+// Output: bufShape, beforeLoop (shared loop index)
+//
+// 1. Initialize bufShape=[], beforeLoop=0
+// 2. For each data dimension dim:
+//    a. if src.elementSize(dim) != res.elementSize(dim): break
+//    b. Get srcExpr = src.iterMap result expr for dim
+//       Get resExpr = res.iterMap result expr for dim
+//    c. If both are affine.dim expressions at same position:
+//       - append src.elementSize(dim) to bufShape
+//       - record as shared, increment beforeLoop
+//    d. Else: break
+// 3. Filter out shared loops whose parents are not shareable
+// 4. Append remaining full data shape to bufShape
+// 5. Return {bufShape, beforeLoop}</span>
+std::pair&lt;SmallVector&lt;int64_t&gt;, int&gt;
+computeConverterBufferShape(ITensorType src, ITensorType res);</code></pre>
+  </details>
+
+  <details>
+    <summary>Algorithm 2 — Kernel Fusion Exploration (StrategyMergeTask.cpp)</summary>
+    <pre><code><span class="comment">// Input: G (kernel graph), Cmax (max on-chip memory per fused kernel)
+// Output: fusion groups, costs
+//
+// F=[{∅}], C=[0], M={} // M maps node→fusion group index
+// for n in topological_sort(G):
+//   gather fusion candidates from predecessors in G
+//   for each predecessor p:
+//     compute memory cost of fusing n with p's group
+//   select nearest valid candidate f_idx with cost f_cost
+//   if no candidate or f_cost + C[f_idx] > Cmax:
+//     create new fusion group {n}
+//   else:
+//     add n to group f_idx, update cost C[f_idx] += f_cost
+// write fusion_index attr back to each kernel</span>
+<span class="keyword">void</span> runFusionExploration(
+    ModuleOp module,
+    int64_t Cmax,
+    DominanceInfo &amp;domInfo);</code></pre>
+  </details>
+
+  <div class="callout warn">
+    <div class="label">Obstacle: AffineMap Comparison in Algorithm 1</div>
+    Comparing AffineMap expressions analytically requires using MLIR's <code>AffineExpr::isSymbolicOrConstant()</code>, <code>getAffineDimExpr()</code>, and <code>AffineMap::compose()</code>. The most common case (contiguous tile order) uses identity maps and is easy. Handle the general case iteratively.
+  </div>
+</div>
+
+<!-- PHASE 5 -->
+<div class="phase-box" id="phase5">
+  <div class="phase-header">
+    <div class="phase-num">5</div>
+    <h3 style="margin:0;color:var(--teal)">Lowering and Bufferization</h3>
+  </div>
+
+  <h4>Step 5.1: LowerITensorToStreamPass (Critical)</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/LowerITensorToStream.cpp</span> <span class="tag new">NEW</span></p>
+  <p>Converts itensor-level IR to stream-level IR:</p>
+  <ol>
+    <li><code>ITensorInstanceOp</code> → <code>StreamOp</code> with depth from itensor analysis</li>
+    <li><code>ITensorWriteOp</code> → loop nest (from itensor iteration space) containing <code>StreamWriteOp</code></li>
+    <li><code>ITensorReadOp</code> → loop nest containing <code>StreamReadOp</code></li>
+    <li><code>ITensorConverterOp</code> → two loop nests connected by ping-pong <code>StreamBufferOp</code></li>
+    <li><code>ITensorForkOp</code> → read once, write to N streams</li>
+    <li>Strip all <code>ITensorType</code> metadata (not needed at stream level)</li>
+  </ol>
+  <div class="callout info">
+    <div class="label">Key Semantic Shift</div>
+    STTaskOp at itensor level uses destination-carried (functional) semantics. After lowering to stream level, tasks use mutable stream semantics — the same <code>%stream</code> SSA value is read/written without SSA chaining. The destination-carried chain is eliminated by the lowering pass.
+  </div>
+
+  <h4>Step 5.2: Extend BufferizeDataflowPass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/BufferizeDataflow.cpp</span> <span class="tag mod">MODIFY</span></p>
+  <p>Add patterns for: KernelOp results → buffer allocation, STTaskOp results → buffer, StreamBufferOp → <code>memref.alloc</code> with ping-pong semantics.</p>
+
+  <h4>Step 5.3: ReduceStreamDepthPass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/ReduceStreamDepth.cpp</span> <span class="tag new">NEW</span></p>
+  <p>Applies LP FIFO sizing results (from Phase 6) to set optimal stream depths on all <code>StreamOp</code> declarations. Falls back to conservative heuristic if LP results unavailable.</p>
+
+  <h4>Step 5.4–5.5: Directive Passes</h4>
+  <ul>
+    <li><span class="file-ref">lib/Transforms/Directive/GenerateDirective.cpp</span> <span class="tag new">NEW</span> — generates HLS pragma attributes: DATAFLOW, PIPELINE II=N, STREAM depth=D, BIND_STORAGE</li>
+    <li><span class="file-ref">lib/Transforms/Directive/MaterializeDirective.cpp</span> <span class="tag new">NEW</span> — converts directive attributes to IR annotations</li>
+  </ul>
+
+  <h4>Step 5.6: Extend ConvertDataflowToFuncPass</h4>
+  <p><span class="file-ref">lib/Transforms/Dataflow/ConvertDataflowToFunc.cpp</span> <span class="tag mod">MODIFY</span></p>
+  <ul>
+    <li>Each <code>KernelOp</code> → top-level function with <code>#pragma HLS DATAFLOW</code></li>
+    <li>Each <code>STTaskOp</code> within → sub-function call</li>
+    <li>Stream arguments passed by reference</li>
+  </ul>
+  <div class="callout warn">
+    <div class="label">Obstacle: Parallel Conversion Paths</div>
+    The existing conversion assumes NodeOp with memref I/O. The new path handles StreamType arguments differently. Consider adding a parallel conversion path (<code>convertKernelToFunc()</code>) rather than modifying the existing <code>convertNodeToFunc()</code>.
+  </div>
+</div>
+
+<!-- PHASE 6 -->
+<div class="phase-box" id="phase6">
+  <div class="phase-header">
+    <div class="phase-num">6</div>
+    <h3 style="margin:0;color:var(--teal)">Design Space Exploration</h3>
+  </div>
+
+  <h4>Step 6.1: Optuna Integration</h4>
+  <p><span class="file-ref">lib/Bindings/Python/StreamTensorDSE.py</span> <span class="tag new">NEW</span></p>
+  <pre><code><span class="keyword">import</span> optuna
+<span class="keyword">import</span> scalehls  <span class="comment"># Python bindings</span>
+
+<span class="keyword">def</span> objective(trial):
+    config = {
+        <span class="string">"tile_size"</span>: trial.suggest_int(<span class="string">"tile"</span>, 4, 64, log=True),
+        <span class="string">"unroll"</span>: trial.suggest_int(<span class="string">"unroll"</span>, 1, 16),
+        <span class="string">"Cmax"</span>: trial.suggest_int(<span class="string">"Cmax"</span>, 1024, 65536, log=True),
+    }
+    result = scalehls.evaluate_design_point(module_mlir, config)
+    <span class="keyword">return</span> result.latency + 0.01 * result.resource_overuse
+
+study = optuna.create_study(sampler=optuna.samplers.TPESampler())
+study.optimize(objective, n_trials=200)</code></pre>
+
+  <h4>Step 6.2: LP FIFO Sizing</h4>
+  <p><span class="file-ref">lib/Transforms/DSE/LPFIFOSizing.cpp</span> <span class="tag new">NEW</span></p>
+
+  <details>
+    <summary>Full LP Formulation</summary>
+    <p><strong>Step 1 — Token Behavior Model:</strong> For each kernel, extract (pipelineII, initialDelay, totalLatency) from <code>KernelTimingAttr</code>.</p>
+    <p><strong>Step 2 — Max Token Calculation for edge (src→dst):</strong></p>
+    <pre><code><span class="comment">// If src produces faster than dst consumes:</span>
+max_tokens = min(T, T - floor((L - delay) / II_dst))
+<span class="comment">// If src produces slower than dst consumes:</span>
+max_tokens = min(T, ceil((delay - D) / II_src))</code></pre>
+    <p><strong>Step 3 — LP Variables:</strong> <code>delay[i][j]</code> for each edge (i,j) — the scheduling delay at that FIFO.</p>
+    <p><strong>Objective:</strong> minimize <code>sum(max_tokens[i][j])</code> ≈ minimize total FIFO depth.</p>
+    <p><strong>Constraints:</strong> for all pairs (u,v) and all paths between them: <code>sum(delay[i][j] on path) ≥ threshold(u,v)</code> where threshold prevents deadlock.</p>
+    <p><strong>Solver:</strong> GLPK via <code>glp_create_prob()</code> / <code>glp_simplex()</code>. Fallback: heuristic depths if GLPK not available.</p>
+  </details>
+
+  <h4>Step 6.3: Vendor HLS Profiling</h4>
+  <p><span class="file-ref">lib/Transforms/DSE/VendorHLSProfile.cpp</span> <span class="tag new">NEW</span></p>
+  <ol>
+    <li>After <code>ConvertDataflowToFunc</code>, emit temporary HLS C++ per kernel</li>
+    <li>Invoke <code>vitis_hls -flow syn</code> via <code>llvm::sys::ExecuteAndWait()</code></li>
+    <li>Parse XML synthesis report for timing metrics</li>
+    <li>Attach <code>KernelTimingAttr</code> to each kernel</li>
+    <li><strong>Cache</strong> results keyed by kernel hash — same kernel (same tiling, same ops) = same metrics</li>
+    <li>Run multiple kernel syntheses in parallel with <code>std::async</code></li>
+  </ol>
+
+  <h4>Step 6.4: ILP Graph Partitioning</h4>
+  <p><span class="file-ref">lib/Transforms/DSE/ILPGraphPartition.cpp</span> <span class="tag new">NEW</span></p>
+  <p>For multi-SLR FPGAs (Alveo U55C has 2 SLRs): binary variable <code>x[i][s]</code> = 1 if task i is on SLR s. Minimize cross-SLR communication + resource imbalance. Use GLPK integer programming mode.</p>
+</div>
+
+<!-- PHASE 7 -->
+<div class="phase-box" id="phase7">
+  <div class="phase-header">
+    <div class="phase-num">7</div>
+    <h3 style="margin:0;color:var(--teal)">HLS C++ Emitter Updates</h3>
+  </div>
+
+  <h4>Step 7.1: Add Emitter Methods</h4>
+  <p><span class="file-ref">lib/Translation/EmitHLSCpp.cpp</span> <span class="tag mod">MODIFY</span></p>
+  <ul>
+    <li><code>emitKernel(KernelOp)</code> → function with <code>#pragma HLS DATAFLOW</code></li>
+    <li><code>emitSTTask(STTaskOp)</code> → sub-function call or inline block</li>
+    <li><code>emitStreamBuffer(StreamBufferOp)</code> → array with <code>#pragma HLS BIND_STORAGE type=fifo</code></li>
+    <li>Handle <code>ITensorType</code> in <code>getDataTypeName()</code> — should be lowered by this point, but assert/error gracefully</li>
+  </ul>
+
+  <h4>Step 7.2: Update Visitor</h4>
+  <p><span class="file-ref">include/scalehls/Dialect/HLS/Visitor.h</span> <span class="tag mod">MODIFY</span> — add HANDLE macros for all new operations in the TypeSwitch.</p>
+
+  <h4>Step 7.3: Pragma Emission</h4>
+  <ul>
+    <li><code>#pragma HLS STREAM variable=X depth=D</code> for each <code>StreamOp</code></li>
+    <li><code>#pragma HLS DATAFLOW</code> at the right function scope</li>
+    <li>Array partition pragmas accounting for pack/widen layout</li>
+  </ul>
+</div>
+
+<!-- PHASE 8 -->
+<div class="phase-box" id="phase8">
+  <div class="phase-header">
+    <div class="phase-num">8</div>
+    <h3 style="margin:0;color:var(--teal)">Runtime and Connectivity Generation</h3>
+  </div>
+
+  <h4>Step 8.1: GenerateRuntimeHostPass</h4>
+  <p><span class="file-ref">lib/Transforms/Runtime/GenerateRuntimeHost.cpp</span> <span class="tag new">NEW</span></p>
+  <pre><code><span class="comment">// Generated host code structure:</span>
+<span class="keyword">auto</span> device = xrt::device(0);
+<span class="keyword">auto</span> xclbin = xrt::xclbin(<span class="string">"kernel.xclbin"</span>);
+device.register_xclbin(xclbin);
+<span class="keyword">auto</span> kernel = xrt::kernel(device,
+    xclbin.get_uuid(), <span class="string">"top_kernel"</span>);
+
+<span class="comment">// Allocate BOs for each external tensor</span>
+<span class="keyword">auto</span> bo_input = xrt::bo(device, input_size,
+    kernel.group_id(0));
+<span class="keyword">auto</span> bo_weights = xrt::bo(device, weight_size,
+    kernel.group_id(1));
+
+<span class="comment">// Pack weights into tiled+widened layout at init</span>
+pack_and_widen(weights, bo_weights.map(), pack_cfg);
+
+<span class="comment">// For each token in autoregressive generation:</span>
+bo_input.write(input_data);
+bo_input.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+<span class="keyword">auto</span> run = kernel(bo_input, bo_weights,
+    bo_output, seq_len);
+run.wait();
+bo_output.sync(XCL_BO_SYNC_BO_FROM_DEVICE);</code></pre>
+
+  <h4>Step 8.2: GenerateConnectivityPass</h4>
+  <p><span class="file-ref">lib/Transforms/Runtime/GenerateConnectivity.cpp</span> <span class="tag new">NEW</span></p>
+  <pre><code>[connectivity]
+nk=top_kernel:1
+sp=top_kernel.m_axi_input:HBM[0]
+sp=top_kernel.m_axi_weights:HBM[1:4]
+sp=top_kernel.m_axi_output:HBM[5]
+slr=top_kernel:SLR0</code></pre>
+
+  <h4>Step 8.3: ConvertMemrefToPointerPass</h4>
+  <p><span class="file-ref">lib/Transforms/Runtime/ConvertMemrefToPointer.cpp</span> <span class="tag new">NEW</span></p>
+  <ul>
+    <li><code>memref&lt;NxT&gt;</code> → <code>T*</code> with <code>#pragma HLS INTERFACE m_axi</code></li>
+    <li><code>hls.stream&lt;T, D&gt;</code> → <code>hls::stream&lt;T&gt;&amp;</code> with <code>#pragma HLS INTERFACE axis</code></li>
+  </ul>
+</div>
+
+<!-- PHASE 9 -->
+<div class="phase-box" id="phase9">
+  <div class="phase-header">
+    <div class="phase-num">9</div>
+    <h3 style="margin:0;color:var(--teal)">LLM Integration and Testing</h3>
+  </div>
+
+  <h4>Step 9.1: Torch-MLIR Frontends for Target Models</h4>
+  <table>
+    <tr><th>Model</th><th>File</th><th>Key Patterns</th></tr>
+    <tr><td>GPT-2</td><td><span class="file-ref">samples/pytorch/gpt2/gpt2.py</span></td><td>Multi-head attention, GELU, LayerNorm</td></tr>
+    <tr><td>Qwen</td><td><span class="file-ref">samples/pytorch/qwen/qwen.py</span></td><td>GQA (grouped-query attention), RMSNorm, SwiGLU</td></tr>
+    <tr><td>Llama</td><td><span class="file-ref">samples/pytorch/llama/llama.py</span></td><td>RoPE (rotary positional embedding), RMSNorm, SwiGLU</td></tr>
+    <tr><td>Gemma</td><td><span class="file-ref">samples/pytorch/gemma/gemma.py</span></td><td>GQA, GeGLU activation</td></tr>
+  </table>
+  <p>For each: load from HuggingFace → trace with <code>torch_mlir.compile(OutputType.LINALG_ON_TENSORS)</code> → provide shape hints for dynamic dims (max_seq_len) → run through StreamTensor pipeline.</p>
+
+  <div class="callout warn">
+    <div class="label">Obstacle: Model Size</div>
+    LLMs have many layers. Compile one transformer block at a time. The block is reused across layers with different weight parameters. This matches the paper's approach (Section 6.1: "triggered multiple times with different weight parameters").
+  </div>
+
+  <h4>Step 9.2: StreamTensor Pipeline Registration</h4>
+  <p><span class="file-ref">lib/Transforms/Passes.cpp</span> <span class="tag mod">MODIFY</span></p>
+  <pre><code><span class="keyword">void</span> scalehls::registerStreamTensorPipeline() {
+  PassPipelineRegistration&lt;StreamTensorPipelineOptions&gt;(
+    <span class="string">"streamtensor-pipeline"</span>,
+    <span class="string">"Compile PyTorch models to streaming dataflow"</span>,
+    [](OpPassManager &amp;pm,
+       <span class="keyword">const</span> StreamTensorPipelineOptions &amp;opts) {
+      <span class="comment">// Linalg Stage</span>
+      pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
+      pm.addPass(mlir::createLinalgFoldUnitExtentDimsPass());
+      <span class="comment">// Tiling (with DSE-provided tile sizes)</span>
+      pm.addPass(createLinalgTilingPass(opts.tileSize));
+      <span class="comment">// Kernel conversion</span>
+      pm.addPass(createConvertLinalgToKernelPass());
+      pm.addPass(createConvertTensorToKernelPass());
+      pm.addPass(createPackKernelInterfacePass());
+      pm.addPass(createWidenKernelInterfacePass());
+      pm.addPass(createMaterializeKernelPass());
+      <span class="comment">// ITensor optimization</span>
+      pm.addPass(createFoldITensorPass());
+      pm.addPass(createVectorizeITensorPass());
+      pm.addPass(createEnsureITensorSingleUsePass());
+      pm.addPass(createStrategyMergeTaskPass(opts.Cmax));
+      pm.addPass(createConvertEmptyToInstancePass());
+      <span class="comment">// Lowering</span>
+      pm.addPass(createLowerITensorToStreamPass());
+      pm.addPass(createBufferizeDataflowPass());
+      pm.addPass(createReduceStreamDepthPass());
+      <span class="comment">// Code generation</span>
+      pm.addPass(createConvertDataflowToFuncPass());
+      pm.addPass(createGenerateDirectivePass());
+      pm.addPass(createConvertMemrefToPointerPass());
+    });
+}</code></pre>
+
+  <h4>Step 9.3: Testing Strategy</h4>
+  <table>
+    <tr><th>Test Type</th><th>Files</th><th>Tool</th></tr>
+    <tr><td>Type roundtrip</td><td><span class="file-ref">test/StreamTensor/Dialect/itensor-type.mlir</span></td><td>scalehls-opt | FileCheck</td></tr>
+    <tr><td>Op verifiers</td><td><span class="file-ref">test/StreamTensor/Dialect/itensor-ops.mlir</span></td><td>scalehls-opt | FileCheck</td></tr>
+    <tr><td>Per-pass tests</td><td><span class="file-ref">test/StreamTensor/Transforms/*.mlir</span></td><td>scalehls-opt -pass-name | FileCheck</td></tr>
+    <tr><td>Integration: 2 fused matmuls</td><td><span class="file-ref">test/StreamTensor/Integration/matmul-stream.mlir</span></td><td>scalehls-opt full pipeline</td></tr>
+    <tr><td>Integration: attention block</td><td><span class="file-ref">test/StreamTensor/Integration/attention-block.mlir</span></td><td>scalehls-opt full pipeline</td></tr>
+    <tr><td>Integration: transformer layer</td><td><span class="file-ref">test/StreamTensor/Integration/transformer-layer.mlir</span></td><td>scalehls-opt full pipeline</td></tr>
+    <tr><td>Functional validation</td><td>All target models</td><td>Vitis HLS C-sim vs golden reference</td></tr>
+  </table>
+</div>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="obstacles">Potential Obstacles and Mitigations</h2>
+
+<div class="callout danger">
+  <div class="label">Obstacle 1: ITensorType Custom Assembly Format</div>
+  <p><strong>Problem:</strong> <code>AffineMap</code> parameter in a type requires manual <code>parse()</code>/<code>print()</code> implementation — TableGen <code>assemblyFormat</code> cannot handle it.</p>
+  <p><strong>Mitigation:</strong> Start with a simplified <code>ITensorType</code> using identity maps only. Add full affine map support in a second pass. Reference: <span class="file-ref">mlir/lib/IR/BuiltinTypes.cpp</span> <code>MemRefType::parse()</code>.</p>
+</div>
+
+<div class="callout danger">
+  <div class="label">Obstacle 2: Destination-Carried Semantics in Loops</div>
+  <p><strong>Problem:</strong> <code>ITensorWriteOp</code>'s SSA-based destination passing must interact correctly with <code>scf.for</code> iter_args, <code>RegionBranchOpInterface</code>, and MLIR's live-in/live-out analysis.</p>
+  <p><strong>Mitigation:</strong> Implement <code>RegionBranchOpInterface</code> on <code>STTaskOp</code>. Study <code>tensor.insert_slice</code> and <code>scf.for</code> in upstream MLIR for the exact pattern.</p>
+</div>
+
+<div class="callout danger">
+  <div class="label">Obstacle 3: Vendor Tool Latency in DSE Loop</div>
+  <p><strong>Problem:</strong> Vitis HLS synthesis takes minutes per kernel. 100 DSE iterations × N kernels = unacceptable compile time.</p>
+  <p><strong>Mitigation:</strong> (1) Cache profiling results keyed by kernel hash. (2) Run kernel syntheses in parallel with <code>std::async</code>. (3) Use analytical estimates for early DSE iterations; profile only the final candidate. (4) Support <code>--profiling-results=file.json</code> flag to preload cached results.</p>
+</div>
+
+<div class="callout danger">
+  <div class="label">Obstacle 4: LLM Dynamic Shapes</div>
+  <p><strong>Problem:</strong> LLMs have dynamic sequence lengths. Torch-MLIR may produce dynamic-shape IR that the static-analysis-based ITensorType inference cannot handle.</p>
+  <p><strong>Mitigation:</strong> Use <code>torch.jit.trace</code> with fixed max_seq_len. Alternatively, use torch-mlir's shape inference to specialize shapes. Compile one transformer block (not the full model). Handle KV cache as an explicitly-sized external memref.</p>
+</div>
+
+<div class="callout warn">
+  <div class="label">Obstacle 5: MLIR Version Compatibility</div>
+  <p><strong>Problem:</strong> HIDA is pinned to a specific LLVM/MLIR commit. Upstream API changes (especially in Linalg and SCF) may conflict.</p>
+  <p><strong>Mitigation:</strong> Pin to the known-good LLVM commit in HIDA's <code>CMakeLists.txt</code>. Wrap any volatile APIs in utility functions to localize migration effort.</p>
+</div>
+
+<div class="callout warn">
+  <div class="label">Obstacle 6: GLPK Dependency</div>
+  <p><strong>Problem:</strong> GLPK may not be available on all build machines.</p>
+  <p><strong>Mitigation:</strong> Make LP sizing optional via CMake <code>option(SCALEHLS_ENABLE_LP "Enable LP FIFO sizing" OFF)</code>. Implement a heuristic fallback: <code>depth = max(2, total_tokens / num_kernels)</code>.</p>
+</div>
+
+<hr>
+
+<!-- ============================================================ -->
+<h2 id="files">Files Summary</h2>
+
+<h3>New Files (~25 files)</h3>
+<table>
+  <tr><th>Phase</th><th>File</th><th>Est. Lines</th></tr>
+  <tr><td>3</td><td><span class="file-ref">lib/Transforms/Dataflow/ConvertLinalgToKernel.cpp</span></td><td>~400</td></tr>
+  <tr><td>3</td><td><span class="file-ref">lib/Transforms/Dataflow/ConvertTensorToKernel.cpp</span></td><td>~200</td></tr>
+  <tr><td>3</td><td><span class="file-ref">lib/Transforms/Dataflow/PackKernelInterface.cpp</span></td><td>~350</td></tr>
+  <tr><td>3</td><td><span class="file-ref">lib/Transforms/Dataflow/WidenKernelInterface.cpp</span></td><td>~250</td></tr>
+  <tr><td>3</td><td><span class="file-ref">lib/Transforms/Dataflow/MaterializeKernel.cpp</span></td><td>~500</td></tr>
+  <tr><td>4</td><td><span class="file-ref">lib/Transforms/Dataflow/FoldITensor.cpp</span></td><td>~300</td></tr>
+  <tr><td>4</td><td><span class="file-ref">lib/Transforms/Dataflow/VectorizeITensor.cpp</span></td><td>~350</td></tr>
+  <tr><td>4</td><td><span class="file-ref">lib/Transforms/Dataflow/EnsureITensorSingleUse.cpp</span></td><td>~150</td></tr>
+  <tr><td>4</td><td><span class="file-ref">lib/Transforms/Dataflow/ConvertEmptyToInstance.cpp</span></td><td>~100</td></tr>
+  <tr><td>4</td><td><span class="file-ref">lib/Transforms/Dataflow/SimplifyTaskStructure.cpp</span></td><td>~200</td></tr>
+  <tr><td>4</td><td><span class="file-ref">lib/Transforms/Dataflow/StrategyMergeTask.cpp</span></td><td>~500</td></tr>
+  <tr><td>4</td><td><span class="file-ref">lib/Transforms/Dataflow/ITensorConverterUtils.cpp</span></td><td>~300</td></tr>
+  <tr><td>5</td><td><span class="file-ref">lib/Transforms/Dataflow/LowerITensorToStream.cpp</span></td><td>~600</td></tr>
+  <tr><td>5</td><td><span class="file-ref">lib/Transforms/Dataflow/ReduceStreamDepth.cpp</span></td><td>~150</td></tr>
+  <tr><td>5</td><td><span class="file-ref">lib/Transforms/Directive/GenerateDirective.cpp</span></td><td>~200</td></tr>
+  <tr><td>5</td><td><span class="file-ref">lib/Transforms/Directive/MaterializeDirective.cpp</span></td><td>~150</td></tr>
+  <tr><td>6</td><td><span class="file-ref">lib/Transforms/DSE/LPFIFOSizing.cpp</span></td><td>~400</td></tr>
+  <tr><td>6</td><td><span class="file-ref">lib/Transforms/DSE/VendorHLSProfile.cpp</span></td><td>~300</td></tr>
+  <tr><td>6</td><td><span class="file-ref">lib/Transforms/DSE/ILPGraphPartition.cpp</span></td><td>~250</td></tr>
+  <tr><td>6</td><td><span class="file-ref">lib/Bindings/Python/StreamTensorDSE.py</span></td><td>~200</td></tr>
+  <tr><td>8</td><td><span class="file-ref">lib/Transforms/Runtime/GenerateRuntimeHost.cpp</span></td><td>~400</td></tr>
+  <tr><td>8</td><td><span class="file-ref">lib/Transforms/Runtime/GenerateConnectivity.cpp</span></td><td>~150</td></tr>
+  <tr><td>8</td><td><span class="file-ref">lib/Transforms/Runtime/ConvertMemrefToPointer.cpp</span></td><td>~200</td></tr>
+</table>
+
+<h3>Modified Files (~8 files)</h3>
+<table>
+  <tr><th>Phase</th><th>File</th><th>Nature of Change</th></tr>
+  <tr><td>1</td><td><span class="file-ref">include/scalehls/Dialect/HLS/HLSTypes.td</span></td><td>Add ITensorType definition</td></tr>
+  <tr><td>1</td><td><span class="file-ref">include/scalehls/Dialect/HLS/HLSAttributes.td</span></td><td>Add KernelTimingAttr, FIFOSizingResultAttr</td></tr>
+  <tr><td>1–2</td><td><span class="file-ref">lib/Dialect/HLS/HLS.cpp</span></td><td>Type parse/print, op verifiers, canonicalizers for new ops</td></tr>
+  <tr><td>2</td><td><span class="file-ref">include/scalehls/Dialect/HLS/HLSOps.td</span></td><td>Add ~15 new operations (KernelOp, STTaskOp, ITensor* ops)</td></tr>
+  <tr><td>2</td><td><span class="file-ref">include/scalehls/Dialect/HLS/Visitor.h</span></td><td>Add HANDLE macros for all new ops</td></tr>
+  <tr><td>5</td><td><span class="file-ref">lib/Transforms/Dataflow/ConvertDataflowToFunc.cpp</span></td><td>Extend for KernelOp → FuncOp conversion</td></tr>
+  <tr><td>5</td><td><span class="file-ref">lib/Transforms/Dataflow/BufferizeDataflow.cpp</span></td><td>Add patterns for StreamBufferOp, STTaskOp</td></tr>
+  <tr><td>7</td><td><span class="file-ref">lib/Translation/EmitHLSCpp.cpp</span></td><td>Add emitters for KernelOp, STTaskOp, StreamBufferOp</td></tr>
+  <tr><td>9</td><td><span class="file-ref">lib/Transforms/Passes.cpp</span></td><td>Register streamtensor-pipeline</td></tr>
+</table>
+
+<h3>Verification Checkpoints</h3>
+<table>
+  <tr><th>After Phase</th><th>Verification</th></tr>
+  <tr><td>1</td><td><code>ITensorType</code> parses, prints, and round-trips correctly in .mlir files</td></tr>
+  <tr><td>2</td><td>All new ops verify, canonicalize, and fold correctly; <code>scalehls-opt</code> accepts them</td></tr>
+  <tr><td>3</td><td>A simple tiled matmul converts to KernelOp + STTaskOp + ITensorType IR</td></tr>
+  <tr><td>4</td><td>Two adjacent kernels fuse correctly with ITensorConverterOp insertion</td></tr>
+  <tr><td>5</td><td>The fused kernel lowers to stream-level IR with correct loop nests</td></tr>
+  <tr><td>6</td><td>LP solver produces feasible FIFO sizes on a 3-kernel test graph</td></tr>
+  <tr><td>7</td><td>Generated HLS C++ compiles with Vitis HLS without errors (synthesis optional)</td></tr>
+  <tr><td>8</td><td>Runtime host code builds and links against XRT</td></tr>
+  <tr><td>9</td><td>GPT-2 transformer block produces correct output, verified by C-simulation</td></tr>
+</table>
+
+</div>
+</body>
+</html>
