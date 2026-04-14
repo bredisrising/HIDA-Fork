@@ -56,4 +56,36 @@ def StageLikeInterface : OpInterface<"StageLikeInterface"> {
   ];
 }
 
+//===----------------------------------------------------------------------===//
+// StreamTensor Interfaces
+//===----------------------------------------------------------------------===//
+
+def ITensorOpInterface : OpInterface<"ITensorOpInterface"> {
+  let description = [{
+    Interface for operations that produce or consume ITensorType values.
+    Provides common queries for itensor operations in the StreamTensor flow.
+  }];
+
+  let methods = [
+    InterfaceMethod<
+      "Return the ITensorType result of this operation, if any",
+      "mlir::scalehls::hls::ITensorType", "getITensorType", (ins),
+      /*methodBody=*/[{}],
+      /*defaultImplementation=*/[{
+        for (auto result : $_op->getResults())
+          if (auto itType = result.getType().template dyn_cast<
+                  mlir::scalehls::hls::ITensorType>())
+            return itType;
+        return nullptr;
+      }]
+    >,
+    InterfaceMethod<
+      "Return true if this operation is a layout-changing operation",
+      "bool", "isLayoutChanging", (ins),
+      /*methodBody=*/[{}],
+      /*defaultImplementation=*/[{ return false; }]
+    >,
+  ];
+}
+
 #endif // SCALEHLS_DIALECT_HLS_HLSINTERFACES_TD

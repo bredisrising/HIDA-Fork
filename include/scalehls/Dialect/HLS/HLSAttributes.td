@@ -194,4 +194,38 @@ def FuncDirectiveAttr : HLSAttr<"FuncDirective"> {
   }];
 }
 
+//===----------------------------------------------------------------------===//
+// StreamTensor attributes
+//===----------------------------------------------------------------------===//
+
+def KernelTimingAttr : HLSAttr<"KernelTiming"> {
+  let summary = "Kernel timing from vendor HLS profiling";
+  let description = [{
+    Stores pipeline II, initial delay, and total latency obtained from
+    vendor HLS synthesis for a kernel.
+  }];
+  let parameters = (ins "int64_t":$pipelineII, "int64_t":$initialDelay,
+                        "int64_t":$totalLatency);
+
+  let mnemonic = "kernel_timing";
+  let assemblyFormat = [{
+    `<` `ii` `=` $pipelineII `,` `delay` `=` $initialDelay `,`
+    `latency` `=` $totalLatency `>`
+  }];
+}
+
+def FIFOSizingResultAttr : HLSAttr<"FIFOSizingResult"> {
+  let summary = "FIFO sizing result from LP solver";
+  let description = [{
+    Stores the optimal FIFO depth and maximum outstanding tokens computed
+    by the LP-based FIFO sizing pass.
+  }];
+  let parameters = (ins "int64_t":$depth, "int64_t":$maxTokens);
+
+  let mnemonic = "fifo_sizing";
+  let assemblyFormat = [{
+    `<` `depth` `=` $depth `,` `max_tokens` `=` $maxTokens `>`
+  }];
+}
+
 #endif // SCALEHLS_DIALECT_HLS_HLSATTRIBUTES_TD

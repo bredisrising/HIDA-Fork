@@ -1,0 +1,759 @@
+# StreamTensor Implementation Plan: Building on HIDA
+
+## Part 1: How HIDA Works
+
+### Overview
+HIDA (Hierarchical Dataflow Architecture) is an MLIR-based HLS compiler that transforms PyTorch models or C++ code into optimized dataflow architectures on FPGAs. It lives at `/home/ankit/dev/insta_research/HIDA-Fork` and is built on the MLIR compiler infrastructure.
+
+### HIDA's Two-Level IR
+HIDA models dataflow at two abstraction levels within a single `hls` dialect (`mlir::scalehls::hls`):
+
+**Functional Dataflow** (high-level, algorithm-oriented):
+- `DispatchOp` — contains a graph of tasks to be dispatched in dataflow
+- `TaskOp` — transparent region containing ops to execute; can be fused/split freely
+- `YieldOp` — terminator returning results from dispatch/task
+
+**Structural Dataflow** (low-level, microarchitecture-oriented):
+- `ScheduleOp` — isolated region with scheduled nodes (counterpart of Dispatch)
+- `NodeOp` — isolated region with explicit I/O classification: inputs (read-only), outputs (written), params (scalars)
+- `BufferOp` — on-chip memory with configurable ping-pong depth
+- `StreamOp` — FIFO channel with `stream_read`/`stream_write` ops
+
+### HIDA's Compilation Pipeline (`lib/Transforms/Passes.cpp:140-298`)
+The `hida-pytorch-pipeline` proceeds in 14 stages:
+
+1. **TOSA/Linalg optimization** — elementwise fusion, dataflow creation from linalg patterns
+2. **Bufferization** — tensor IR → memref IR
+3. **Linalg to Affine** — linalg generics → affine loop nests
+4. **Affine loop fusion** — fuse producer-consumer loops
+5. **Buffer placement** — classify buffers as BRAM/DRAM based on size threshold
+6. **Loop tiling** — tile loops with configurable tile size
+7. **Local buffer allocation** — create tile-sized local buffers
+8. **Affine loop dataflowing** — create DispatchOp/TaskOp hierarchy from affine loops
+9. **Lower dataflow** — Functional (Task/Dispatch) → Structural (Node/Schedule/Buffer)
+10. **Eliminate multi-producer/consumer** — fix shared buffer violations
+11. **Parallelize dataflow nodes** — intensity-aware + connection-aware loop unrolling
+12. **Memory optimization** — reduce II, vectorize buffers
+13. **Convert dataflow to func** — nodes become sub-functions
+14. **Directive generation** — emit HLS pragmas, create AXI interfaces
+
+### Key HIDA Design Decisions
+- **Inter-task communication is memory-mapped**: Tasks communicate through `BufferOp` (memref), not streams. Only scalar values use `StreamOp`.
+- **No tensor-level stream encoding**: The `StreamType` is `hls.stream<elementType, depth>` — a simple FIFO with no layout/access-pattern metadata.
+- **Single-level tiling**: All kernels tiled uniformly with `--loop-tile-size`.
+- **Flat DSE**: Intensity+Connection-aware parallelization, but no multi-level design space hierarchy.
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `include/scalehls/Dialect/HLS/HLSTypes.td` | StreamType, AxiType, BundleType definitions |
+| `include/scalehls/Dialect/HLS/HLSOps.td` | All 20+ operation definitions |
+| `include/scalehls/Dialect/HLS/HLSAttributes.td` | MemoryKind, Partition, Tile, Timing attrs |
+| `lib/Dialect/HLS/HLS.cpp` | Dialect impl, verifiers, canonicalizers (~54KB) |
+| `lib/Dialect/HLS/Utils.cpp` | getConsumers/Producers, fuseOpsIntoTask, etc. |
+| `lib/Dialect/HLS/Analysis.cpp` | ComplexityAnalysis, CorrelationAnalysis |
+| `lib/Transforms/Dataflow/*.cpp` | All dataflow transformation passes |
+| `lib/Transforms/Passes.cpp` | Pipeline registration and orchestration |
+| `lib/Translation/EmitHLSCpp.cpp` | MLIR → Vitis HLS C++ code generation |
+
+---
+
+## Part 2: How StreamTensor Improves on HIDA
+
+StreamTensor is the next-generation compiler from the same group, published at MICRO '25. It fundamentally changes how inter-kernel data communication works — from memory-mapped buffers to streaming FIFOs with rich type-level metadata.
+
+### Key Improvement 1: Iterative Tensor (itensor) Type System
+HIDA uses standard `memref` between nodes. StreamTensor introduces `itensor` that encodes:
+- **Element shape**: the tensor slice (tile) shape per iteration
+- **Iteration space**: `[tripcount_0, ...] * [step_0, ...]` defining how tiles are produced/consumed
+- **Iteration map**: affine map from iteration dimensions to data dimensions
+
+This enables the compiler to verify stream layout compatibility at the type level. When a producer's output `itensor` matches a consumer's input `itensor`, they can be connected via a simple FIFO. When they differ, a stream layout converter is automatically inserted.
+
+### Key Improvement 2: Stream-Based Kernel Fusion
+HIDA fuses tasks at the Linalg level (pattern matching). StreamTensor fuses at the dataflow kernel level using the `itensor` type:
+- **Algorithm 1** computes the minimal ping-pong buffer for layout conversion between incompatible `itensor` types
+- **Algorithm 2** greedily fuses kernels in topological order, constrained by on-chip memory budget `Cmax`
+- Any two kernels can be fused by design (the converter handles layout mismatches)
+
+### Key Improvement 3: Automatic DMA Generation
+In HIDA, external memory interfaces are handled manually or through buffer placement heuristics. StreamTensor's `kernel` operation has tensor I/O at its boundary — conversions from tensor to `itensor` at the kernel boundary automatically become DMAs with:
+- Ping-pong buffering to hide memory latency
+- Pack/widen transformations for bandwidth optimization
+- Vectorized data access patterns
+
+### Key Improvement 4: LP-Based FIFO Sizing
+HIDA uses fixed-depth buffers. StreamTensor models token production/consumption as piecewise linear functions, then solves an LP to minimize total FIFO area while preventing deadlock. This requires profiling pipeline II and initial delay from the vendor HLS tool mid-compilation.
+
+### Key Improvement 5: Hierarchical Design Space Exploration
+HIDA has flat intensity+connection-aware parallelization. StreamTensor explores three nested design spaces:
+1. **Linalg Tiling Space** (tile sizes, unroll factors, vectorization, permutation) — searched via Optuna
+2. **Kernel Fusion Space** (which kernels to fuse) — Algorithm 2 with feedback from tiling
+3. **Resource Allocation Space** (FIFO sizes, memory placement, graph partition) — LP/ILP
+
+### Key Improvement 6: LLM Support
+HIDA targets CNNs (ResNet, MobileNet, VGG). StreamTensor targets LLMs (GPT-2, Qwen, Llama, Gemma) — fusing entire transformer blocks onto a single FPGA with all intermediate results streaming on-chip.
+
+### Summary of IR Differences
+
+| Concept | HIDA | StreamTensor |
+|---------|------|--------------|
+| Top-level structure | `DispatchOp` → `TaskOp` | `KernelOp` → `TaskOp` |
+| Structural level | `ScheduleOp` → `NodeOp` → `BufferOp` | Same (lowered from kernel) |
+| Tensor communication | `memref` through `BufferOp` | `itensor` through FIFOs |
+| Stream type | `hls.stream<T, depth>` (scalar) | `itensor<shape, iterspace, itermap>` (tensor tiles) |
+| Layout conversion | N/A | `itensor_converter` with ping-pong buffer |
+| DMA | Implicit via buffer placement | Explicit via kernel boundary conversion |
+| FIFO sizing | Fixed depth | LP-optimized |
+
+---
+
+## Part 3: Implementation Plan
+
+### Phase 1: ITensor Type System (Foundation)
+**Every subsequent phase depends on this.**
+
+#### Step 1.1: Define ITensorType
+**File**: `include/scalehls/Dialect/HLS/HLSTypes.td` (add after line 25)
+
+Add a new type `ITensorType` with parameters:
+- `elementType: Type` — scalar data type (e.g., f16, i8)
+- `elementShape: ArrayRef<int64_t>` — shape of each tensor slice/tile
+- `iterTripCounts: ArrayRef<int64_t>` — trip counts for each iteration dimension
+- `iterStepSizes: ArrayRef<int64_t>` — step sizes for each iteration dimension  
+- `iterationMap: AffineMap` — maps iteration indices to data-space indices
+
+Utility methods needed on the type class:
+- `getIterRank()` — number of iteration dimensions
+- `getElementRank()` — number of element shape dimensions (= data dimensions)
+- `getDataShape()` — compute full data shape from element shape × iteration space
+- `getTotalElements()` — total number of tensor slices produced
+- `isLayoutCompatible(ITensorType other)` — check if two itensors can connect directly via FIFO (same element shape, same iteration space, same map)
+
+**Implementation**: `lib/Dialect/HLS/HLS.cpp` — add custom parser/printer for the type (the `AffineMap` parameter needs special assembly format handling since `assemblyFormat` can't handle it automatically).
+
+**Verification logic**: Ensure `iterTripCounts.size() == iterStepSizes.size()`, ensure `iterationMap.getNumInputs() == iterTripCounts.size()`, ensure `iterationMap.getNumResults() == elementShape.size()`.
+
+#### Step 1.2: Add Supporting Attributes
+**File**: `include/scalehls/Dialect/HLS/HLSAttributes.td`
+
+- `KernelTimingAttr` — `{pipelineII: i64, initialDelay: i64, totalLatency: i64}` — from vendor HLS profiling
+- `FIFOSizingResultAttr` — `{depth: i64, maxTokens: i64}` — from LP solver
+
+#### Step 1.3: Build and Test
+Write `test/StreamTensor/Dialect/itensor-type-roundtrip.mlir` to verify parsing/printing roundtrips.
+
+**Potential obstacle**: MLIR's TableGen for type parameters with `AffineMap` requires `hasCustomAssemblyFormat = 1` and manual implementation of `parse`/`print` in C++. The standard `assemblyFormat` string cannot handle `AffineMap`. Look at how `MemRefType` handles its affine map parameter in upstream MLIR for reference.
+
+---
+
+### Phase 2: ITensor and Structure Operations
+**Depends on**: Phase 1
+
+#### Step 2.1: Structure Operations (Table 3 of paper)
+**File**: `include/scalehls/Dialect/HLS/HLSOps.td`
+
+Add these operations (coexisting with existing Dispatch/Task):
+
+**`KernelOp`** — Top-level dataflow kernel (like Figure 1 in paper)
+- Trait: `IsolatedFromAbove` (like NodeOp, not transparent like TaskOp)
+- Arguments: `Variadic<TensorType>` sources
+- Results: `Variadic<TensorType>` results  
+- Region: contains `STTaskOp` operations communicating via `itensor` values
+- At the kernel boundary, tensor arguments are conceptually converted to/from `itensor` — these become implicit DMAs during materialization
+- Body block arguments have `ITensorType` (even though op arguments have `TensorType`)
+
+**`STTaskOp`** (StreamTensor Task) — Dataflow task within kernel
+- Trait: `SingleBlockImplicitTerminator<"STYieldOp">`, transparent (not isolated)
+- Uses destination-carried semantics for itensor: `inits` operands receive itensor destinations, `results` are updated itensors
+- Has `@name` attribute for identifying the task
+
+**`STYieldOp`** — Terminator for KernelOp and STTaskOp
+
+**Design decision**: Keep existing `DispatchOp/TaskOp/NodeOp/ScheduleOp` for backward compatibility. The new `KernelOp/STTaskOp` are used by the StreamTensor pipeline. Eventually `KernelOp` lowers through the existing structural ops.
+
+#### Step 2.2: ITensor Operations (Table 1 of paper)
+**File**: `include/scalehls/Dialect/HLS/HLSOps.td`
+
+All new ops with `ITensorType` operands/results:
+
+| Operation | Key Details |
+|-----------|-------------|
+| `ITensorEmptyOp` | No operands, returns `ITensorType`. Placeholder (no FIFO backing). |
+| `ITensorInstanceOp` | No operands, returns `ITensorType`. Creates a concrete FIFO. |
+| `ITensorReadOp` | Operands: `source: ITensorType`, `init: TensorType`. Returns tensor value. Pulls one tile from FIFO. |
+| `ITensorWriteOp` | Operands: `value: TensorType/AnyType`, `dest: ITensorType`. Returns updated `ITensorType`. Destination-carried push. |
+| `ITensorCastOp` | Source → result `ITensorType` cast (no layout change). |
+| `ITensorReassociateOp` | Reassociate element shape/iteration space dimensions. From tensor expand/collapse_shape. |
+| `ITensorConverterOp` | Source → result layout conversion. Has ping-pong buffer size attribute (computed by Algorithm 1). |
+| `ITensorChunkOp` | Split one itensor into variadic results along a dimension. |
+| `ITensorConcatOp` | Join variadic itensors into one result. |
+| `ITensorForkOp` | Broadcast one itensor to multiple identical consumers. |
+| `ITensorJoinOp` | Round-robin join from multiple producers. |
+
+**Critical implementation detail for `ITensorWriteOp`**: It uses destination-carried semantics (like `scf.for` iter_args). The `dest` itensor is passed in, the write appends to it, and the `result` is the updated itensor. This enables SSA-based tracking of FIFO state.
+
+#### Step 2.3: Stream-Level Operations (Table 2 of paper)
+**File**: `include/scalehls/Dialect/HLS/HLSOps.td`
+
+The existing `StreamOp`, `StreamReadOp`, `StreamWriteOp` can be reused. Add:
+- `ITensorToStreamOp` — conversion bridge (must be eliminated during bufferization)
+- `StreamToITensorOp` — reverse bridge
+- `StreamBufferOp` — ping-pong (double) buffer, distinct from `BufferOp`
+- `StreamCastOp` — stream type cast without layout change
+
+#### Step 2.4: Update Visitor and Interfaces
+**File**: `include/scalehls/Dialect/HLS/Visitor.h` — add HANDLE macros for all new ops
+**File**: `include/scalehls/Dialect/HLS/HLSInterfaces.td` — add `ITensorOpInterface` for common itensor op queries
+
+**Potential obstacle**: The destination-carried semantics of `ITensorWriteOp` interact with MLIR's `scf.for` iter_args. The verifier must ensure that itensor values flow correctly through loop-carried dependencies. Study how upstream MLIR's `tensor.insert_slice` handles this pattern.
+
+---
+
+### Phase 3: Linalg-to-Kernel Conversion Passes
+**Depends on**: Phase 2
+
+These passes implement the left side of Figure 4 (Linalg stage → Linalg Tiling → Linalg to Dataflow).
+
+#### Step 3.1: `ConvertLinalgToKernelPass`
+**File to create**: `lib/Transforms/Dataflow/ConvertLinalgToKernel.cpp`
+
+This replaces `CreateDataflowFromLinalg.cpp` for the StreamTensor flow.
+
+**Algorithm** (matching paper Section 4.1, Figure 6(a)→(c)):
+1. For each tiled linalg operation (wrapped in `scf.for` with `extract_slice`/`insert_slice`):
+   - Analyze the surrounding `scf.for` loops to extract iteration tripcounts and step sizes
+   - Analyze `extract_slice`/`insert_slice` offsets and sizes to determine the `iterationMap` and `elementShape`
+   - Create a `KernelOp` with tensor arguments
+   - Convert kernel body block arguments from `TensorType` to `ITensorType` using the inferred type
+   - Replace `extract_slice` with `ITensorReadOp`
+   - Replace `insert_slice` with `ITensorWriteOp`
+   - Wrap the tiled computation loop nest in an `STTaskOp`
+
+**Key function signatures**:
+```cpp
+ITensorType inferITensorType(AffineLoopBand &loops, tensor::ExtractSliceOp extract);
+void convertTiledLinalgToKernel(scf::ForOp outerLoop, linalg::GenericOp generic);
+```
+
+**Potential obstacle**: The tiled linalg may have complex extract_slice patterns (dynamic offsets, non-unit strides). Start by supporting the common case (static offsets proportional to loop induction variables) and add dynamic support later.
+
+#### Step 3.2: `ConvertTensorToKernelPass`
+**File to create**: `lib/Transforms/Dataflow/ConvertTensorToKernel.cpp`
+
+Handles non-linalg tensor operations (pad, collapse_shape, expand_shape, chunk, concat) that appear between kernels. These become simple pass-through kernels.
+
+#### Step 3.3: `PackKernelInterfacePass`
+**File to create**: `lib/Transforms/Dataflow/PackKernelInterface.cpp`
+
+**Algorithm** (paper Section 4.2, Figure 6(d)):
+1. For each kernel, examine input/output tensor types
+2. Insert `tensor.pack` before kernel to convert default layout → tiled layout (e.g., `tensor<64x64>` → `tensor<4x4x16x16>`)
+3. Insert `tensor.unpack` after kernel to convert back
+4. For static tensors (weights), fold pack into the tensor data (no runtime cost)
+5. For dynamic tensors (activations), attempt to fold pack/unpack with neighboring kernels
+
+#### Step 3.4: `WidenKernelInterfacePass`
+**File to create**: `lib/Transforms/Dataflow/WidenKernelInterface.cpp`
+
+Widens tensor elements to vectors for maximum memory bandwidth:
+- With 512-bit DDR/HBM and uint8 elements, group 64 elements into `vector<64>`
+- The packed `tensor<4x4x16x16>` becomes `tensor<4x4x2x2xvector<8x8>>`
+- Updates `ITensorType` element shapes accordingly
+
+#### Step 3.5: `MaterializeKernelPass`
+**File to create**: `lib/Transforms/Dataflow/MaterializeKernel.cpp`
+
+**Algorithm** (paper Section 4.3.1, Figure 7(a)→(b)):
+1. For each kernel, materialize the implicit DMA at boundaries:
+   - Input boundary: generate `scf.for` loop that loads from packed tensor, stores to ping-pong buffer, pushes to FIFO via `ITensorWriteOp`
+   - Output boundary: generate loop that pulls from FIFO, stores to ping-pong buffer, writes to external memory
+2. These DMA tasks are wrapped in `STTaskOp` operations within the kernel
+3. After materialization, the kernel contains: DMA-in tasks → compute tasks → DMA-out tasks
+
+**Potential obstacle**: The DMA materialization must correctly handle the packed+widened tensor layout. The loop nest structure (indices, bounds, strides) must match the `ITensorType` iteration space exactly.
+
+#### Step 3.6: Register all passes
+**Files to modify**:
+- `include/scalehls/Transforms/Passes.td` — add pass definitions with options
+- `include/scalehls/Transforms/Passes.h` — add `createXxxPass()` factory functions
+- `lib/Transforms/CMakeLists.txt` — add new .cpp files to build
+
+---
+
+### Phase 4: ITensor Optimization and Kernel Fusion
+**Depends on**: Phase 3
+
+#### Step 4.1: `FoldITensorPass`
+**File to create**: `lib/Transforms/Dataflow/FoldITensor.cpp`
+
+**Algorithm** (paper Section 4.3.2, Figure 7(b)→(c)):
+- When an `ITensorWriteOp` in one task connects to an `ITensorReadOp` in the next task via a FIFO, and both have exactly matching memory access patterns:
+  - Eliminate the FIFO and merge the two local buffers
+  - The fetched tile is passed directly to the compute op
+- This is more restrictive than stream-based fusion (requires exact pattern match) but saves memory and latency
+
+**Key check**: Access pattern match — compare the affine access maps of the write's source and the read's destination. If identical, folding is safe.
+
+#### Step 4.2: `VectorizeITensorPass`
+**File to create**: `lib/Transforms/Dataflow/VectorizeITensor.cpp`
+
+**Algorithm** (paper Section 4.3.3, Figure 7(c)→(d)):
+1. For each itensor FIFO between tasks, determine the required bandwidth based on kernel parallelism
+2. Vectorize the itensor: change element shape from `tensor<16x16>` to `vector<2x4>`
+3. On the write side: generate `vector.transfer_read` from buffer → `ITensorWriteOp` to FIFO
+4. On the read side: generate `ITensorReadOp` from FIFO → `vector.transfer_write` to buffer
+5. Update the `ITensorType` to reflect the vectorized element
+
+#### Step 4.3: `EnsureITensorSingleUsePass`
+**File to create**: `lib/Transforms/Dataflow/EnsureITensorSingleUse.cpp`
+
+For each itensor value with multiple consumers, insert `ITensorForkOp` to create duplicated streams. This is the streaming equivalent of HIDA's `EliminateMultiConsumer`.
+
+#### Step 4.4: `ConvertEmptyToInstancePass`
+**File to create**: `lib/Transforms/Dataflow/ConvertEmptyToInstance.cpp`
+
+Convert all `ITensorEmptyOp` (placeholder) to `ITensorInstanceOp` (concrete FIFO) after the itensor graph is finalized. Sets initial FIFO depths (will be optimized by LP later).
+
+#### Step 4.5: `SimplifyTaskStructurePass`
+**File to create**: `lib/Transforms/Dataflow/SimplifyTaskStructure.cpp`
+
+Clean up the task hierarchy: merge adjacent tasks with compatible iteration spaces, remove empty tasks, inline single-op tasks.
+
+#### Step 4.6: `StrategyMergeTaskPass` (Kernel Fusion)
+**File to create**: `lib/Transforms/Dataflow/StrategyMergeTask.cpp`
+**File to create**: `lib/Transforms/Dataflow/ITensorConverterUtils.cpp` (utility)
+
+This is the most algorithmic pass — implements kernel fusion (Algorithms 1 and 2 from the paper).
+
+**Algorithm 1 — Converter Generation** (`ITensorConverterUtils.cpp`):
+```
+Input: src ITensorType, res ITensorType
+Output: bufShape (ping-pong buffer shape), beforeLoop (shared loop index)
+
+1. Initialize bufShape=[], beforeLoop=0, sharedLoops=[]
+2. For each data dimension dim:
+   a. If src.elementSize(dim) != res.elementSize(dim): break
+   b. Get srcExpr = src.iterMap[dim], resExpr = res.iterMap[dim]  
+   c. If both are dimension expressions at same position:
+      - Append src.elementSize(dim) to bufShape
+      - Record as shared loop, increment beforeLoop
+   d. Else: break
+3. Filter out shared loops whose parent loops are not shareable
+4. Append remaining full data shape to bufShape
+5. Return {bufShape, beforeLoop}
+```
+
+**Algorithm 2 — Kernel Fusion Exploration** (`StrategyMergeTask.cpp`):
+```
+Input: G (kernel graph), Cmax (max on-chip memory per fused kernel)
+Output: F (fusion groups), C (costs)
+
+1. F=[{∅}], C=[0], M={} // M maps node→fusion group index
+2. For n in topological_sort(G):
+   a. Gather fusion candidates from predecessors
+   b. For each predecessor p: compute memory cost of fusing n with p's group
+   c. Select nearest valid candidate f_idx with cost f_cost
+   d. If no candidate or f_cost + C[f_idx] > Cmax:
+      - Create new fusion group {n}
+   e. Else:
+      - Add n to group f_idx, update cost
+3. Write fusion_index back to each kernel
+```
+
+**Pass options**: `Cmax` (max fusion cost, typically total BRAM/URAM on target FPGA).
+
+**Potential obstacles**:
+- Algorithm 1 requires comparing `AffineMap` expressions analytically. Use MLIR's `AffineExpr` comparison utilities.
+- Algorithm 2 is greedy and may produce suboptimal results. The paper acknowledges this and uses Optuna feedback from the tiling space to refine.
+- The `ITensorConverterOp` materialization (generating the actual ping-pong buffer implementation with scf.for loops) is complex — defer full implementation to Phase 5.
+
+---
+
+### Phase 5: Lowering and Bufferization
+**Depends on**: Phase 4
+
+#### Step 5.1: `LowerITensorToStreamPass`
+**File to create**: `lib/Transforms/Dataflow/LowerITensorToStream.cpp`
+
+This is the critical pass that converts `itensor`-level IR to `stream`-level IR (paper Section 3.1.3).
+
+**Algorithm**:
+1. For each `ITensorInstanceOp`: create `StreamOp` with `depth` from itensor analysis
+2. For each `ITensorWriteOp`: generate loop nest (from itensor iteration space) containing `StreamWriteOp`
+3. For each `ITensorReadOp`: generate loop nest containing `StreamReadOp`
+4. For each `ITensorConverterOp`: generate two loop nests connected by a ping-pong `StreamBufferOp`
+5. For each `ITensorForkOp`: generate duplicating logic (read once, write to multiple streams)
+6. Strip `ITensorType` information (stream layout metadata not needed after this point)
+
+After this pass, only `StreamOp`/`StreamReadOp`/`StreamWriteOp` and `StreamBufferOp` remain.
+
+**Key constraint**: The `STTaskOp` at itensor level uses destination-carried semantics. After lowering to stream level, tasks use mutable stream semantics (the same `%stream` is read/written without SSA chaining). This matches the paper's description in Section 3.2.2.
+
+#### Step 5.2: Extend `BufferizeDataflowPass`
+**File to modify**: `lib/Transforms/Dataflow/BufferizeDataflow.cpp`
+
+Add patterns for:
+- `KernelOp` results → buffer allocation
+- `STTaskOp` results → buffer allocation
+- `StreamBufferOp` → `memref.alloc` with ping-pong semantics
+
+#### Step 5.3: `ReduceStreamDepthPass`
+**File to create**: `lib/Transforms/Dataflow/ReduceStreamDepth.cpp`
+
+Applies LP FIFO sizing results (from Phase 6) to set optimal stream depths on all `StreamOp` declarations. If LP results aren't available, uses a conservative heuristic.
+
+#### Step 5.4: `GenerateDirectivePass`
+**File to create**: `lib/Transforms/Directive/GenerateDirective.cpp`
+
+Generates HLS pragma attributes:
+- `#pragma HLS DATAFLOW` on kernel functions
+- `#pragma HLS PIPELINE II=N` on task loops
+- `#pragma HLS STREAM variable=X depth=D` for each FIFO
+- `#pragma HLS BIND_STORAGE variable=X type=fifo impl=bram/uram`
+
+#### Step 5.5: `MaterializeDirectivePass`
+**File to create**: `lib/Transforms/Directive/MaterializeDirective.cpp`
+
+Converts directive attributes to IR annotations that the emitter can translate to pragmas.
+
+#### Step 5.6: Adapt `ConvertDataflowToFuncPass`
+**File to modify**: `lib/Transforms/Dataflow/ConvertDataflowToFunc.cpp`
+
+Extend to handle `KernelOp`:
+- Each kernel becomes a top-level function with `#pragma HLS DATAFLOW`
+- Each `STTaskOp` within becomes a sub-function
+- Stream arguments are passed by reference (not value)
+
+**Potential obstacle**: The existing `ConvertNodeToFunc` assumes `NodeOp` with memref I/O. The new path must handle `StreamType` arguments. May need a parallel conversion path rather than modifying the existing one.
+
+---
+
+### Phase 6: Design Space Exploration
+**Depends on**: Phases 3-5 (the passes being explored must exist)
+
+#### Step 6.1: Optuna Integration
+**File to create**: `lib/Bindings/Python/StreamTensorDSE.py`
+**File to create**: `lib/Transforms/DSE/OptunaInterface.cpp`
+
+Architecture:
+- Python script drives the search loop using Optuna's TPE (Tree-structured Parzen Estimator) sampler
+- Each trial: Python proposes hyperparameters → invokes C++ pipeline with those params → receives cost metric
+- Hyperparameters: `default_tile_size`, `overall_unroll_size`, `Cmax`
+
+The C++ side exposes:
+```cpp
+// Evaluate a design point. Returns {latency_estimate, resource_estimate}
+std::pair<double, double> evaluateDesignPoint(
+    ModuleOp module, const TilingConfig &config, const FusionConfig &fusion);
+```
+
+#### Step 6.2: LP FIFO Sizing
+**File to create**: `lib/Transforms/DSE/LPFIFOSizing.cpp`
+**File to create**: `lib/Transforms/DSE/LPFIFOSizing.h`
+
+**Algorithm** (paper Section 5.3):
+
+1. **Token Behavior Model**: For each kernel, model token production as piecewise linear function using (pipeline_II, initial_delay, total_latency)
+
+2. **Maximum Token Calculation**:
+   - If source throughput > target: `max_tokens = min(T, T - floor((L - delay) / II_target))`
+   - If source throughput < target: `max_tokens = min(T, ceil((delay - D) / II_source))`
+
+3. **LP Formulation**:
+   - Variables: `delay[i][j]` for each edge (i,j) in kernel graph
+   - Objective: minimize `sum(delay[i][j])` over all edges
+   - Constraints: for all kernel pairs (u,v) and all paths between them: `sum(delay[i][j] on path) >= threshold(u,v)` where `threshold(u,v) = max accumulated initial delays over all paths`
+   - Convert `delay` values to `max_tokens` values, set as FIFO depths
+
+4. **Equalization Strategy**: 
+   - Normal: use original pipeline IIs
+   - Conservative: scale all IIs to match slowest kernel (smaller FIFOs, possible latency increase)
+
+**LP solver**: Use GLPK (GNU Linear Programming Kit). Add as optional CMake dependency. If not available, fall back to heuristic: set all FIFO depths to `max(2, total_tokens / num_kernels)`.
+
+#### Step 6.3: Vendor HLS Profiling
+**File to create**: `lib/Transforms/DSE/VendorHLSProfile.cpp`
+
+Mid-flow profiling to get pipeline II and initial delay:
+1. After `ConvertDataflowToFunc`, emit temporary HLS C++ for each kernel function
+2. Invoke `vitis_hls` in synthesis-only mode (`-flow syn`)
+3. Parse the XML synthesis report for timing metrics
+4. Attach `KernelTimingAttr` to each kernel
+5. Cache results to avoid re-profiling during DSE iterations
+
+Use `llvm::sys::ExecuteAndWait` for process invocation. Run multiple kernel syntheses in parallel using `std::async`.
+
+**Potential obstacle**: Vitis HLS synthesis takes minutes per kernel. For DSE with many iterations, this becomes the bottleneck. Mitigations:
+- Cache profiling results keyed by kernel hash (same kernel = same metrics)
+- Run kernel syntheses in parallel
+- Use analytical estimates for early DSE iterations, profile only the final candidate
+
+#### Step 6.4: ILP Graph Partitioning
+**File to create**: `lib/Transforms/DSE/ILPGraphPartition.cpp`
+
+For multi-die FPGAs (e.g., multi-SLR U55C):
+- Variables: binary assignment of each task to a die
+- Objective: minimize inter-die communication + resource imbalance
+- Constraint: one-hot assignment per task
+
+Use GLPK's integer programming mode. This is only needed for designs spanning multiple dies.
+
+---
+
+### Phase 7: HLS C++ Emitter Updates
+**Depends on**: Phases 2, 5
+
+#### Step 7.1: Add Emitter Methods for New Ops
+**File to modify**: `lib/Translation/EmitHLSCpp.cpp`
+
+Add to `ModuleEmitter`:
+- `emitKernel(KernelOp)` → emit as a function with `#pragma HLS DATAFLOW`
+- `emitSTTask(STTaskOp)` → emit as sub-function call or inline block
+- `emitStreamBuffer(StreamBufferOp)` → emit as array with `#pragma HLS BIND_STORAGE`
+- Handle `ITensorType` in `getDataTypeName()` → should be lowered by this point, but handle gracefully
+
+#### Step 7.2: Update Visitor
+**File to modify**: `include/scalehls/Dialect/HLS/Visitor.h`
+
+Add `HANDLE` macros for all new operations in the `TypeSwitch`.
+
+#### Step 7.3: Pragma Emission
+Ensure that:
+- `#pragma HLS STREAM variable=X depth=D` is emitted for each `StreamOp`
+- `#pragma HLS DATAFLOW` is emitted at the right function scope
+- Array partition pragmas account for the new pack/widen layout
+
+**Potential obstacle**: The emitter currently relies on `NodeOp` → `FuncOp` conversion. The StreamTensor path goes `KernelOp` → `FuncOp` via an extended `ConvertDataflowToFunc`. Ensure the emitter handles both paths.
+
+---
+
+### Phase 8: Runtime and Connectivity Generation
+**Depends on**: Phase 7
+
+#### Step 8.1: `GenerateRuntimeHostPass`
+**File to create**: `lib/Transforms/Runtime/GenerateRuntimeHost.cpp`
+
+Generate XRT (Xilinx Runtime) host code:
+```cpp
+// Pseudocode of generated host
+auto device = xrt::device(0);
+auto xclbin = xrt::xclbin("kernel.xclbin");
+device.register_xclbin(xclbin);
+auto kernel = xrt::kernel(device, xclbin.get_uuid(), "top_kernel");
+
+// Allocate BOs for each external tensor
+auto bo_input = xrt::bo(device, input_size, kernel.group_id(0));
+auto bo_weights = xrt::bo(device, weight_size, kernel.group_id(1));
+auto bo_output = xrt::bo(device, output_size, kernel.group_id(2));
+
+// Pack weights into tiled+widened layout (offline, no runtime cost for static params)
+pack_and_widen(weights_data, bo_weights.map(), pack_config);
+
+// For each token in autoregressive generation:
+bo_input.write(input_data);
+bo_input.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+auto run = kernel(bo_input, bo_weights, bo_output, seq_len);
+run.wait();
+bo_output.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
+```
+
+#### Step 8.2: `GenerateConnectivityPass`
+**File to create**: `lib/Transforms/Runtime/GenerateConnectivity.cpp`
+
+Generate Vitis `connectivity.cfg`:
+```
+[connectivity]
+nk=top_kernel:1
+sp=top_kernel.m_axi_input:HBM[0]
+sp=top_kernel.m_axi_weights:HBM[1:4]
+sp=top_kernel.m_axi_output:HBM[5]
+slr=top_kernel:SLR0
+```
+
+#### Step 8.3: `ConvertMemrefToPointerPass`
+**File to create**: `lib/Transforms/Runtime/ConvertMemrefToPointer.cpp`
+
+Convert `memref` function arguments to raw pointers for HLS synthesis:
+- `memref<NxT>` → `T*` with `#pragma HLS INTERFACE m_axi`
+- `hls.stream<T, D>` → `hls::stream<T>&` with `#pragma HLS INTERFACE axis`
+
+---
+
+### Phase 9: LLM Integration and Testing
+**Depends on**: All previous phases
+
+#### Step 9.1: Torch-MLIR Frontend for LLMs
+**File to create**: `samples/pytorch/gpt2/gpt2.py`
+**File to create**: `samples/pytorch/qwen/qwen.py`
+**File to create**: `samples/pytorch/llama/llama.py`
+
+For each model:
+1. Load from HuggingFace
+2. Trace with `torch_mlir.compile()` using `OutputType.LINALG_ON_TENSORS`
+3. Provide shape hints for dynamic dimensions (max_seq_len)
+4. Run through StreamTensor pipeline
+
+**Key LLM patterns to handle**:
+- Multi-head attention (QKV projection, scaled dot-product, output projection)
+- LayerNorm / RMSNorm (reduction + elementwise)
+- Feed-forward networks (linear → activation → linear)
+- KV-cache management (dynamic tensor shapes)
+
+#### Step 9.2: StreamTensor Pipeline Registration
+**File to modify**: `lib/Transforms/Passes.cpp`
+
+Register the complete pipeline:
+```cpp
+void scalehls::registerStreamTensorPipeline() {
+  PassPipelineRegistration<StreamTensorPipelineOptions>(
+    "streamtensor-pipeline",
+    "Compile PyTorch models to streaming dataflow with StreamTensor",
+    [](OpPassManager &pm, const StreamTensorPipelineOptions &opts) {
+      // Linalg Stage
+      pm.addPass(mlir::createLinalgElementwiseOpFusionPass());
+      pm.addPass(mlir::createLinalgFoldUnitExtentDimsPass());
+      // ... (full pipeline as listed in Figure 4)
+    });
+}
+```
+
+#### Step 9.3: Testing Strategy
+
+**Unit tests** (test each op and type independently):
+- `test/StreamTensor/Dialect/itensor-type.mlir` — type roundtrip
+- `test/StreamTensor/Dialect/itensor-ops.mlir` — op verifiers
+- `test/StreamTensor/Dialect/kernel-ops.mlir` — structure ops
+
+**Pass tests** (test each pass on small MLIR snippets):
+- `test/StreamTensor/Transforms/convert-linalg-to-kernel.mlir`
+- `test/StreamTensor/Transforms/strategy-merge-task.mlir`
+- `test/StreamTensor/Transforms/lower-itensor-to-stream.mlir`
+- One test file per pass, using `// RUN: scalehls-opt %s -pass-name | FileCheck %s`
+
+**Integration tests** (end-to-end on small models):
+- `test/StreamTensor/Integration/matmul-stream.mlir` — 2 fused matmuls
+- `test/StreamTensor/Integration/attention-block.mlir` — MHA pattern
+- `test/StreamTensor/Integration/transformer-layer.mlir` — full transformer block
+
+**Functional validation**:
+- Generate HLS C++ for each test model
+- Use Vitis HLS C-simulation to compare against golden reference
+- Measure: correctness, latency, resource utilization
+
+---
+
+## Potential Obstacles and Mitigations
+
+### Obstacle 1: ITensorType Complexity
+The `ITensorType` with `AffineMap` parameter is unprecedented in HIDA. MLIR's type infrastructure handles it, but the parser/printer/hasher must be carefully implemented.
+
+**Mitigation**: Start with a simplified `ITensorType` that uses identity maps, then add full affine map support.
+
+### Obstacle 2: Destination-Carried Semantics for ITensor
+The SSA-based destination-carried pattern (`%result = itensor_write %value into %dest`) requires careful handling in MLIR's dominance and use-def analysis.
+
+**Mitigation**: Study how `tensor.insert_slice` and `scf.for` iter_args handle this pattern in upstream MLIR. Copy the same approach.
+
+### Obstacle 3: Vendor Tool Integration
+The LP FIFO sizing requires profiling pipeline II from Vitis HLS mid-compilation. This creates an external dependency and significant compilation time.
+
+**Mitigation**: 
+- Make profiling optional (use heuristic estimates by default)
+- Cache profiling results aggressively
+- Run profiling in parallel across kernels
+- Support a `--profiling-results=file.json` flag to preload results
+
+### Obstacle 4: LLM Model Size
+LLM models have many layers. Compiling an entire model may hit MLIR memory/time limits.
+
+**Mitigation**: 
+- Compile one transformer block at a time (the block is reused across layers)
+- Use the runtime to sequence block execution with different weights
+- This matches the paper's approach (Section 6.1: "triggered multiple times with different weight parameters")
+
+### Obstacle 5: MLIR Version Compatibility
+HIDA is built on a specific MLIR version. Some upstream passes may have changed APIs.
+
+**Mitigation**: 
+- Pin to a known-good LLVM/MLIR commit
+- Abstract over API differences in utility functions
+- Test compilation early in Phase 1
+
+---
+
+## Implementation Order Summary
+
+```
+Phase 1 (ITensorType) ──→ Phase 2 (Operations) ──→ Phase 3 (Linalg-to-Kernel)
+                                                         │
+                                                         ▼
+                                                    Phase 4 (Kernel Fusion)
+                                                         │
+                                                         ▼
+                                                    Phase 5 (Lowering)
+                                                         │
+                                              ┌──────────┼──────────┐
+                                              ▼          ▼          ▼
+                                         Phase 6     Phase 7     Phase 8
+                                         (DSE)      (Emitter)   (Runtime)
+                                              └──────────┼──────────┘
+                                                         ▼
+                                                    Phase 9 (LLM + Testing)
+```
+
+## Verification Plan
+
+After each phase, verify:
+- **Phase 1**: `ITensorType` parses, prints, and round-trips correctly
+- **Phase 2**: All ops verify, canonicalize, and fold correctly
+- **Phase 3**: A simple tiled matmul converts to kernel+task+itensor IR
+- **Phase 4**: Two adjacent kernels fuse correctly with converter insertion
+- **Phase 5**: The fused kernel lowers to stream-level IR with correct loop nests
+- **Phase 6**: LP solver produces feasible FIFO sizes on a 3-kernel graph
+- **Phase 7**: Generated HLS C++ compiles with Vitis HLS without errors
+- **Phase 8**: Runtime host code builds and runs on target FPGA
+- **Phase 9**: GPT-2 transformer block produces correct output on FPGA
+
+---
+
+## Files Summary
+
+### New Files (~25 files)
+| Phase | File | Lines (est.) |
+|-------|------|-------------|
+| 3 | `lib/Transforms/Dataflow/ConvertLinalgToKernel.cpp` | ~400 |
+| 3 | `lib/Transforms/Dataflow/ConvertTensorToKernel.cpp` | ~200 |
+| 3 | `lib/Transforms/Dataflow/PackKernelInterface.cpp` | ~350 |
+| 3 | `lib/Transforms/Dataflow/WidenKernelInterface.cpp` | ~250 |
+| 3 | `lib/Transforms/Dataflow/MaterializeKernel.cpp` | ~500 |
+| 4 | `lib/Transforms/Dataflow/FoldITensor.cpp` | ~300 |
+| 4 | `lib/Transforms/Dataflow/VectorizeITensor.cpp` | ~350 |
+| 4 | `lib/Transforms/Dataflow/EnsureITensorSingleUse.cpp` | ~150 |
+| 4 | `lib/Transforms/Dataflow/ConvertEmptyToInstance.cpp` | ~100 |
+| 4 | `lib/Transforms/Dataflow/SimplifyTaskStructure.cpp` | ~200 |
+| 4 | `lib/Transforms/Dataflow/StrategyMergeTask.cpp` | ~500 |
+| 4 | `lib/Transforms/Dataflow/ITensorConverterUtils.cpp` | ~300 |
+| 5 | `lib/Transforms/Dataflow/LowerITensorToStream.cpp` | ~600 |
+| 5 | `lib/Transforms/Dataflow/ReduceStreamDepth.cpp` | ~150 |
+| 5 | `lib/Transforms/Directive/GenerateDirective.cpp` | ~200 |
+| 5 | `lib/Transforms/Directive/MaterializeDirective.cpp` | ~150 |
+| 6 | `lib/Transforms/DSE/LPFIFOSizing.cpp` | ~400 |
+| 6 | `lib/Transforms/DSE/VendorHLSProfile.cpp` | ~300 |
+| 6 | `lib/Transforms/DSE/ILPGraphPartition.cpp` | ~250 |
+| 6 | `lib/Bindings/Python/StreamTensorDSE.py` | ~200 |
+| 8 | `lib/Transforms/Runtime/GenerateRuntimeHost.cpp` | ~400 |
+| 8 | `lib/Transforms/Runtime/GenerateConnectivity.cpp` | ~150 |
+| 8 | `lib/Transforms/Runtime/ConvertMemrefToPointer.cpp` | ~200 |
+
+### Modified Files (~8 files)
+| Phase | File | Nature of Change |
+|-------|------|-----------------|
+| 1 | `include/scalehls/Dialect/HLS/HLSTypes.td` | Add ITensorType |
+| 1 | `include/scalehls/Dialect/HLS/HLSAttributes.td` | Add KernelTimingAttr |
+| 1-2 | `lib/Dialect/HLS/HLS.cpp` | Type/op implementations |
+| 2 | `include/scalehls/Dialect/HLS/HLSOps.td` | Add ~15 new operations |
+| 2 | `include/scalehls/Dialect/HLS/Visitor.h` | Add HANDLE macros |
+| 5 | `lib/Transforms/Dataflow/ConvertDataflowToFunc.cpp` | Extend for KernelOp |
+| 7 | `lib/Translation/EmitHLSCpp.cpp` | Add emitters for new ops |
+| 9 | `lib/Transforms/Passes.cpp` | Register StreamTensor pipeline |

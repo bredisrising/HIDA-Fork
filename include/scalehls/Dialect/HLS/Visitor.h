@@ -28,6 +28,13 @@ public:
             AxiBundleOp, AxiPortOp, AxiPackOp, PrimMulOp, PrimCastOp,
             hls::AffineSelectOp, hls::VectorInitOp,
 
+            // StreamTensor operations.
+            KernelOp, STTaskOp, STYieldOp, ITensorEmptyOp, ITensorInstanceOp,
+            ITensorReadOp, ITensorWriteOp, ITensorReassociateOp,
+            ITensorConverterOp, ITensorForkOp, ITensorJoinOp, ITensorChunkOp,
+            ITensorConcatOp, ITensorCastOp, ITensorToStreamOp,
+            StreamToITensorOp, StreamBufferOp, StreamCastOp,
+
             // Function operations.
             func::CallOp, func::ReturnOp,
 
@@ -109,6 +116,26 @@ public:
   HANDLE(PrimCastOp);
   HANDLE(hls::AffineSelectOp);
   HANDLE(hls::VectorInitOp);
+
+  // StreamTensor operations.
+  HANDLE(KernelOp);
+  HANDLE(STTaskOp);
+  HANDLE(STYieldOp);
+  HANDLE(ITensorEmptyOp);
+  HANDLE(ITensorInstanceOp);
+  HANDLE(ITensorReadOp);
+  HANDLE(ITensorWriteOp);
+  HANDLE(ITensorReassociateOp);
+  HANDLE(ITensorConverterOp);
+  HANDLE(ITensorForkOp);
+  HANDLE(ITensorJoinOp);
+  HANDLE(ITensorChunkOp);
+  HANDLE(ITensorConcatOp);
+  HANDLE(ITensorCastOp);
+  HANDLE(ITensorToStreamOp);
+  HANDLE(StreamToITensorOp);
+  HANDLE(StreamBufferOp);
+  HANDLE(StreamCastOp);
 
   // Control flow operations.
   HANDLE(func::CallOp);

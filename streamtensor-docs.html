@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StreamTensor Official Docs — Complete Reference</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+    --border: #30363d; --text: #c9d1d9; --bright: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --green: #3fb950;
+    --yellow: #d29922; --red: #f85149; --purple: #bc8cff;
+    --orange: #ffa657; --teal: #39d353; --code-bg: #1a1f2b;
+    --pink: #f778ba;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.75; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 44px 24px 80px; }
+  h1 { font-size: 2.2em; color: var(--bright); margin-bottom: 6px; }
+  .sub { color: var(--muted); margin-bottom: 36px; font-size: 1em; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
+  h2 { font-size: 1.6em; color: var(--accent); margin: 52px 0 18px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1.2em; color: var(--purple); margin: 32px 0 10px; }
+  h4 { font-size: 1em; color: var(--orange); margin: 20px 0 7px; }
+  p { margin-bottom: 12px; }
+  code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85em; background: var(--code-bg); color: var(--orange); padding: 2px 6px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; margin: 12px 0; }
+  pre code { background: none; color: var(--text); padding: 0; font-size: 0.87em; line-height: 1.5; }
+  .kw { color: var(--purple); } .ty { color: var(--teal); } .cm { color: var(--muted); font-style: italic; } .st { color: var(--green); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9em; }
+  th { background: var(--bg3); color: var(--accent); text-align: left; padding: 9px 12px; border: 1px solid var(--border); }
+  td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg2); }
+  .box { border-radius: 8px; padding: 16px 20px; margin: 14px 0; border-left: 4px solid; }
+  .box.blue { background: #0d2137; border-color: var(--accent); }
+  .box.yellow { background: #2b1d0e; border-color: var(--yellow); }
+  .box.green { background: #0d2b0d; border-color: var(--green); }
+  .box.red { background: #2d0f0f; border-color: var(--red); }
+  .box .lbl { font-weight: 700; font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; display: block; }
+  .box.blue .lbl { color: var(--accent); } .box.yellow .lbl { color: var(--yellow); }
+  .box.green .lbl { color: var(--green); } .box.red .lbl { color: var(--red); }
+  ul, ol { padding-left: 22px; margin-bottom: 12px; }
+  li { margin: 4px 0; }
+  .op-block { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin: 14px 0; }
+  .op-name { font-family: monospace; font-size: 1.05em; color: var(--teal); font-weight: 700; }
+  .op-summary { color: var(--muted); font-size: 0.92em; margin-left: 12px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.73em; font-weight: 600; margin-left: 6px; }
+  .badge.pure { background: #0d2b0d; color: var(--green); border: 1px solid var(--green); }
+  .badge.impure { background: #2d0f0f; color: var(--red); border: 1px solid var(--red); }
+  .badge.new { background: #1a0d2b; color: var(--purple); border: 1px solid var(--purple); }
+  .toc { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 36px; }
+  .toc h3 { color: var(--accent); margin: 0 0 12px; }
+  .toc ol { padding-left: 18px; } .toc li { margin: 5px 0; } .toc a { color: var(--muted); }
+  .toc a:hover { color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 12px 0; }
+  @media(max-width:680px){.grid2{grid-template-columns:1fr;}}
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card h4 { color: var(--teal); margin-top: 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 44px 0; }
+  .file { color: var(--teal); font-family: monospace; font-size: 0.87em; }
+  .dial-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.78em; font-weight: 700; margin-right: 4px; }
+  .d-df { background:#0d2137; color:var(--accent); }
+  .d-hls { background:#1a0d2b; color:var(--purple); }
+  .d-te { background:#0d2b0d; color:var(--green); }
+  .d-ae { background:#2b1d0e; color:var(--yellow); }
+  .d-rt { background:#2d0f0f; color:var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>StreamTensor Official Documentation</h1>
+<p class="sub">Complete reference extracted from <strong>hanchenye.com/streamtensor</strong> — 5 dialects, 45+ passes, full Python API. This is our ground truth for implementation.</p>
+
+<div class="box blue">
+  <span class="lbl">Key Insight vs. Original Plan</span>
+  The docs reveal that StreamTensor is <strong>a new project with its own dialects</strong>, not just modifications to the HIDA <code>hls</code> dialect. It introduces 5 new/extended dialects: <code>dataflow</code>, <code>hls</code> (new, different from HIDA's), <code>tensor_ext</code>, <code>arith_ext</code>, and <code>runtime</code>. The ITensorType and all streaming ops live in the <code>dataflow</code> dialect.
+</div>
+
+<div class="toc">
+  <h3>Table of Contents</h3>
+  <ol>
+    <li><a href="#arch">Architecture: 5 Dialects</a></li>
+    <li><a href="#dataflow">dataflow Dialect — Types, Operations, Attributes</a></li>
+    <li><a href="#hls">hls Dialect — Connectivity & Hardware Mapping</a></li>
+    <li><a href="#tensor_ext">tensor_ext Dialect</a></li>
+    <li><a href="#arith_ext">arith_ext Dialect</a></li>
+    <li><a href="#runtime">runtime Dialect</a></li>
+    <li><a href="#passes">All Passes (45+)</a></li>
+    <li><a href="#python">Python API — Compiler, DSE, Profiler, Synthesizer</a></li>
+    <li><a href="#pipeline">Full Compilation Pipeline (from Python API)</a></li>
+    <li><a href="#delta">Delta: What This Changes in Our Plan</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="arch">1. Architecture: 5 Dialects</h2>
+
+<table>
+  <tr><th>Dialect</th><th>Tag</th><th>Purpose</th><th>Key Contents</th></tr>
+  <tr><td><code>dataflow</code></td><td><span class="dial-tag d-df">df</span></td><td>Core streaming IR — the heart of StreamTensor</td><td>ITensorType, StreamType, KernelOp, TaskOp, all ITensor/Stream ops (21 ops total)</td></tr>
+  <tr><td><code>hls</code></td><td><span class="dial-tag d-hls">hls</span></td><td>Hardware connectivity, SLR mapping, memory types</td><td>ConnectivityOp, StreamConnectionOp, SystemPortOp, ComputeUnitType, MemoryKind enum</td></tr>
+  <tr><td><code>tensor_ext</code></td><td><span class="dial-tag d-te">te</span></td><td>Tensor operations for packing/widening</td><td>ChunkOp, InstanceOp, WidenOp, UnWidenOp, VectorizationEncodingAttr</td></tr>
+  <tr><td><code>arith_ext</code></td><td><span class="dial-tag d-ae">ae</span></td><td>Quantization operations</td><td>QuantizeOp, DeQuantizeOp, ReQuantizeOp, MathIOp</td></tr>
+  <tr><td><code>runtime</code></td><td><span class="dial-tag d-rt">rt</span></td><td>XRT host code representation</td><td>18 runtime ops (xrt_device, xrt_buffer, xrt_run, etc.), OpaqueType, PointerType</td></tr>
+</table>
+
+<div class="box yellow">
+  <span class="lbl">Important Difference from HIDA</span>
+  HIDA has one <code>hls</code> dialect with everything. StreamTensor splits concerns across 5 dialects. When implementing, we add these as <strong>new namespaces alongside HIDA's existing hls dialect</strong> — or we can reuse the same <code>hls</code> namespace and extend it. The docs show the <code>hls</code> dialect in StreamTensor is almost entirely different from HIDA's (no DispatchOp/TaskOp/NodeOp — those are replaced).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="dataflow">2. dataflow Dialect</h2>
+
+<h3>2.1 Types</h3>
+
+<div class="op-block">
+  <span class="op-name">!dataflow.itensor&lt;elementType, iterTripCounts, iterSteps, iterMap&gt;</span>
+  <p style="margin-top:8px">An iterative tensor — the core type of StreamTensor.</p>
+  <table>
+    <tr><th>Parameter</th><th>C++ Type</th><th>Description</th></tr>
+    <tr><td><code>elementType</code></td><td><code>mlir::Type</code></td><td>The element type of each tile (e.g., <code>f32</code>, <code>i8</code>, <code>vector&lt;4xf32&gt;</code>)</td></tr>
+    <tr><td><code>iterTripCounts</code></td><td><code>ArrayRef&lt;int64_t&gt;</code></td><td>Number of iterations per dimension of the iteration space</td></tr>
+    <tr><td><code>iterSteps</code></td><td><code>ArrayRef&lt;int64_t&gt;</code></td><td>Step sizes for each iteration dimension</td></tr>
+    <tr><td><code>iterMap</code></td><td><code>mlir::AffineMap</code></td><td>Maps iteration indices → tensor data dimensions</td></tr>
+  </table>
+  <p style="margin-top:10px"><strong>Example:</strong> A 64x128xf32 tensor tiled into 16x16 tiles (4 tiles in dim0, 8 tiles in dim1):</p>
+  <pre><code>!dataflow.itensor&lt;f32, iter_space: [4, 8] * [16, 16], iter_map: (d0, d1) -&gt; (d0, d1)&gt;</code></pre>
+  <p>Note: <code>iterTripCounts=[4,8]</code>, <code>iterSteps=[16,16]</code>, <code>iterMap=(d0,d1)-&gt;(d0,d1)</code>. The <code>iterSteps</code> encode the element shape (16x16 tiles). <strong>This type has custom assembly format because of the AffineMap parameter.</strong></p>
+</div>
+
+<div class="op-block">
+  <span class="op-name">!dataflow.stream&lt;elementType, memorySpace&gt;</span>
+  <p style="margin-top:8px">A FIFO channel between producer and consumer modules.</p>
+  <table>
+    <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>elementType</code></td><td><code>mlir::Type</code></td><td>Type of each FIFO element</td></tr>
+    <tr><td><code>memorySpace</code></td><td><code>mlir::Attribute</code></td><td>Memory implementation (BRAM, URAM, SRL, etc.) — optional</td></tr>
+  </table>
+</div>
+
+<h3>2.2 Structure Operations</h3>
+
+<div class="op-block">
+  <span class="op-name">dataflow.kernel</span><span class="badge new">Structure</span>
+  <p style="margin-top:8px">Top-level dataflow kernel containing multiple tasks. Each kernel compiles to one HLS top function with <code>#pragma HLS DATAFLOW</code>.</p>
+  <table>
+    <tr><th>Field</th><th>Details</th></tr>
+    <tr><td>Attribute <code>sym_name</code></td><td>StringAttr — kernel function name</td></tr>
+    <tr><td>Attribute <code>inputsPacked</code></td><td>DenseBoolArrayAttr — which inputs use packed layout</td></tr>
+    <tr><td>Attribute <code>resultsPacked</code></td><td>DenseBoolArrayAttr — which outputs use packed layout</td></tr>
+    <tr><td>Operands <code>inputs</code></td><td>Optional variadic ranked tensors — external data (from DDR/HBM)</td></tr>
+    <tr><td>Results</td><td>Variadic ranked tensors — outputs written back to DDR/HBM</td></tr>
+    <tr><td>Traits</td><td><code>SingleBlockImplicitTerminator&lt;YieldOp&gt;</code>, <code>SingleBlock</code></td></tr>
+  </table>
+  <pre><code>dataflow.kernel @attention_block
+    inputs(%q, %k, %v : tensor&lt;512x64xf16&gt;, ...)
+    inputs_packed [false, true]  results_packed [false]
+    (%q_it, %k_it : !dataflow.itensor&lt;...&gt;, ...) {
+  <span class="cm">// Tasks inside communicate via itensors/streams</span>
+  dataflow.yield %out_tensor
+} : (tensor&lt;512x64xf16&gt;, ...) -&gt; tensor&lt;512x64xf16&gt;</code></pre>
+</div>
+
+<div class="op-block">
+  <span class="op-name">dataflow.task</span><span class="badge new">Structure</span>
+  <p style="margin-top:8px">A single dataflow task within a kernel. Has optional <code>kernel</code> flag (is this task the main compute kernel?) and <code>dataDriven</code> flag (should it start when data arrives rather than on schedule?).</p>
+  <table>
+    <tr><th>Field</th><th>Details</th></tr>
+    <tr><td><code>sym_name</code></td><td>StringAttr — task function name</td></tr>
+    <tr><td><code>kernel</code></td><td>UnitAttr — marks this as the primary compute task</td></tr>
+    <tr><td><code>dataDriven</code></td><td>UnitAttr — task fires when input data is available</td></tr>
+    <tr><td><code>inits</code></td><td>Optional variadic — destination-carried init values (iter_args pattern)</td></tr>
+    <tr><td>Results</td><td>Variadic — updated destination-carried values</td></tr>
+    <tr><td>Traits</td><td><code>SingleBlockImplicitTerminator&lt;YieldOp&gt;</code>, <code>SingleBlock</code></td></tr>
+  </table>
+</div>
+
+<div class="op-block">
+  <span class="op-name">dataflow.yield</span>
+  <p style="margin-top:8px">Terminates a KernelOp or TaskOp, returning results. Parent constraint: <code>HasParent&lt;KernelOp, TaskOp&gt;</code>. Implements <code>RegionBranchTerminatorOpInterface</code>.</p>
+</div>
+
+<div class="op-block">
+  <span class="op-name">dataflow.buffer</span>
+  <p style="margin-top:8px">A on-chip dataflow buffer (BRAM/URAM allocation). Results in a statically-shaped memref. Implements <code>MemoryEffectOpInterface</code>.</p>
+  <pre><code>%buf = dataflow.buffer : memref&lt;16x16xf32&gt;</code></pre>
+</div>
+
+<h3>2.3 ITensor Operations</h3>
+
+<table>
+  <tr><th>Operation</th><th>Pure?</th><th>Operands → Results</th><th>Notes</th></tr>
+  <tr><td><code>dataflow.itensor_empty</code></td><td><span class="badge pure">Pure</span></td><td>() → itensor</td><td>Placeholder with no FIFO. Converted to instance later.</td></tr>
+  <tr><td><code>dataflow.itensor_instance</code></td><td><span class="badge impure">Impure</span></td><td>() → itensor</td><td>Concrete FIFO. Has <code>depth: i64</code> attribute.</td></tr>
+  <tr><td><code>dataflow.itensor_read</code></td><td><span class="badge pure">Pure</span></td><td>source:itensor, init:tensor? → value</td><td>Pops one tile. Implements <code>DestinationStyleOpInterface</code>.</td></tr>
+  <tr><td><code>dataflow.itensor_write</code></td><td><span class="badge pure">Pure</span></td><td>value, dest:itensor → itensor</td><td>Destination-carried push. Returns updated itensor cursor.</td></tr>
+  <tr><td><code>dataflow.itensor_cast</code></td><td><span class="badge pure">Pure</span></td><td>source:itensor → itensor</td><td>Type cast, no layout change. Implements <code>ITensorViewLikeOpInterface</code>.</td></tr>
+  <tr><td><code>dataflow.itensor_reassociate</code></td><td><span class="badge pure">Pure</span></td><td>source:itensor → itensor</td><td>Reshape element/iteration dims. Has <code>shapeReassociation</code>, <code>iterationReassociation</code> attrs.</td></tr>
+  <tr><td><code>dataflow.itensor_buffer</code></td><td><span class="badge pure">Pure</span></td><td>source:itensor → itensor</td><td>Buffer at a position. Attrs: <code>bufferType</code>, <code>loopIndex</code>, <code>dimIndex</code>.</td></tr>
+  <tr><td><code>dataflow.itensor_chunk</code></td><td><span class="badge pure">Pure</span></td><td>source:itensor → results:variadic itensor</td><td>Split along iter/data dim. Attrs: <code>iterDim</code>, <code>dim</code>, <code>size</code>.</td></tr>
+  <tr><td><code>dataflow.itensor_concat</code></td><td><span class="badge pure">Pure</span></td><td>sources:variadic itensor → itensor</td><td>Concatenate along iter/data dim. Attrs: <code>iterDim</code>, <code>dim</code>.</td></tr>
+  <tr><td><code>dataflow.itensor_fork</code></td><td><span class="badge pure">Pure</span></td><td>source:itensor → results:variadic itensor</td><td>Broadcast one itensor to N identical consumers.</td></tr>
+  <tr><td><code>dataflow.itensor_join</code></td><td><span class="badge pure">Pure</span></td><td>sources:variadic itensor → itensor</td><td>Round-robin join from N producers.</td></tr>
+  <tr><td><code>dataflow.itensor_to_stream</code></td><td><span class="badge pure">Pure</span></td><td>iTensor:itensor → stream</td><td>Bridge from itensor to stream (eliminated during lowering).</td></tr>
+  <tr><td><code>dataflow.stream_to_itensor</code></td><td><span class="badge pure">Pure</span></td><td>stream → iTensor:itensor</td><td>Reverse bridge.</td></tr>
+</table>
+
+<h3>2.4 Stream Operations</h3>
+
+<table>
+  <tr><th>Operation</th><th>Pure?</th><th>Description</th></tr>
+  <tr><td><code>dataflow.stream</code></td><td><span class="badge impure">Impure</span></td><td>Instantiate a FIFO channel. Attr: <code>depth: i64</code>. Implements <code>MemoryEffectOpInterface</code>.</td></tr>
+  <tr><td><code>dataflow.stream_read</code></td><td><span class="badge impure">Impure</span></td><td>Pop from stream. Implements <code>MemoryEffectOpInterface</code>.</td></tr>
+  <tr><td><code>dataflow.stream_write</code></td><td><span class="badge impure">Impure</span></td><td>Push to stream. Syntax: <code>$value into $dest</code>. Implements <code>MemoryEffectOpInterface</code>.</td></tr>
+  <tr><td><code>dataflow.stream_cast</code></td><td>—</td><td>Cast stream type. Implements <code>StreamViewLikeOpInterface</code>.</td></tr>
+</table>
+
+<h3>2.5 Attributes</h3>
+
+<div class="op-block">
+  <span class="op-name">#dataflow.partition&lt;[kinds], [factors]&gt;</span>
+  <p style="margin-top:8px">Array partition layout for on-chip buffers. PartitionKind enum: NONE=0, CYCLIC=1, BLOCK=2, COMPLETE=3.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="hls">3. hls Dialect (StreamTensor's version)</h2>
+
+<div class="box yellow">
+  <span class="lbl">Note</span>
+  StreamTensor's <code>hls</code> dialect is completely different from HIDA's <code>hls</code> dialect. It's focused on hardware connectivity, SLR assignment, and port mapping — not computation. The computation ops (Dispatch/Task/Node/Schedule) are gone.
+</div>
+
+<h3>3.1 Operations</h3>
+<table>
+  <tr><th>Op</th><th>Summary</th><th>Key Attributes/Operands</th></tr>
+  <tr><td><code>hls.connectivity</code></td><td>Container for hardware connection definitions</td><td><code>sym_name</code>; <code>HasParent&lt;ModuleOp&gt;</code>, <code>IsolatedFromAbove</code></td></tr>
+  <tr><td><code>hls.number_kernel</code></td><td>How many instances of a kernel to create</td><td><code>kernelName</code> (FlatSymbolRef), <code>numKernels: i64</code>; produces variadic <code>ComputeUnitType</code></td></tr>
+  <tr><td><code>hls.stream_connection</code></td><td>FIFO connection between two compute units</td><td><code>sourcePort</code>, <code>targetPort</code> (StringAttr), <code>fifoDepth: i64</code>; operands: source and target ComputeUnitType</td></tr>
+  <tr><td><code>hls.super_logic_region</code></td><td>Assign a compute unit to an SLR</td><td><code>index: i64</code>; operand: ComputeUnitType</td></tr>
+  <tr><td><code>hls.system_port</code></td><td>Map compute unit port to external system interface (HBM channel)</td><td><code>computeUnitPort</code>, <code>tag</code> (StringAttr), <code>indexMin</code>, <code>indexMax: i64</code></td></tr>
+</table>
+
+<h3>3.2 Types and Enums</h3>
+<table>
+  <tr><th>Item</th><th>Syntax</th><th>Description</th></tr>
+  <tr><td><code>ComputeUnitType</code></td><td><code>!hls.cu&lt;"kernel_name"&gt;</code></td><td>Represents one instantiated compute unit (kernel instance)</td></tr>
+  <tr><td><code>MemoryKind</code> enum</td><td><code>#hls.memory&lt;bram_fifo&gt;</code></td><td>Memory resource types: UNKNOWN, LUTRAM_2P, BRAM_2P, URAM_2P, BRAM_T2P, URAM_T2P, SRL_FIFO, LUTRAM_FIFO, BRAM_FIFO, URAM_FIFO, DRAM</td></tr>
+</table>
+
+<div class="box blue">
+  <span class="lbl">Generated by passes</span>
+  The <code>hls</code> dialect ops are NOT written by the user. They are generated by <code>-streamtensor-generate-connectivity</code>, <code>-streamtensor-generate-directive</code>, and <code>-streamtensor-materialize-directive</code> passes. The user works at the <code>dataflow</code> level.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="tensor_ext">4. tensor_ext Dialect</h2>
+
+<table>
+  <tr><th>Op/Attr</th><th>Type</th><th>Summary</th><th>Key Details</th></tr>
+  <tr><td><code>tensor_ext.chunk</code></td><td>Op</td><td>Split tensor along a dimension</td><td>Attrs: <code>dim: i64</code>, <code>size: i64</code>; source: ranked tensor → variadic ranked tensor</td></tr>
+  <tr><td><code>tensor_ext.instance</code></td><td>Op</td><td>Non-pure tensor instance (concrete allocation)</td><td>No operands → ranked tensor; used after lowering from <code>tensor.empty</code></td></tr>
+  <tr><td><code>tensor_ext.widen</code></td><td>Op</td><td>Convert tensor to vector-element form</td><td><code>tensor&lt;NxT&gt;</code> → <code>tensor&lt;N/WxvectorWxT&gt;</code>; implements <code>TensorViewLikeOpInterface</code></td></tr>
+  <tr><td><code>tensor_ext.unwiden</code></td><td>Op</td><td>Reverse vector widening</td><td><code>tensor&lt;N/WxvectorWxT&gt;</code> → <code>tensor&lt;NxT&gt;</code></td></tr>
+  <tr><td><code>#tensor_ext.vector&lt;[shape]&gt;</code></td><td>Attr</td><td>Vectorization encoding for a tensor</td><td>Attached to tensors to describe their vectorization shape</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="arith_ext">5. arith_ext Dialect</h2>
+
+<table>
+  <tr><th>Op</th><th>Summary</th><th>Attributes</th></tr>
+  <tr><td><code>arith_ext.quantize</code></td><td>Float → integer quantization</td><td><code>scale: f32</code>, <code>zero_point: i64</code></td></tr>
+  <tr><td><code>arith_ext.dequantize</code></td><td>Integer → float dequantization</td><td><code>scale: f32</code>, <code>zero_point: i64</code></td></tr>
+  <tr><td><code>arith_ext.requantize</code></td><td>Integer → integer requantization</td><td><code>scale: f32</code>, <code>zero_point: i64</code></td></tr>
+  <tr><td><code>arith_ext.mathi</code></td><td>Integer math (sin, cos, sqrt, etc.)</td><td><code>predicate: MathPredicateAttr</code> (25 ops: acos through tanh)</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="runtime">6. runtime Dialect</h2>
+
+<p>Represents XRT host code in MLIR. Generated by <code>-streamtensor-generate-runtime-host-func</code> and lowered to C++ by the emitter.</p>
+
+<h3>6.1 Types</h3>
+<table>
+  <tr><th>Type</th><th>Syntax</th><th>C++ Equivalent</th></tr>
+  <tr><td><code>OpaqueType</code></td><td><code>!runtime.opaque&lt;"xrt::device"&gt;</code></td><td>Any C++ type by name (xrt::device, xrt::kernel, xrt::bo, etc.)</td></tr>
+  <tr><td><code>PointerType</code></td><td><code>!runtime.ptr&lt;f32, 64&gt;</code></td><td><code>float*</code> with element count hint</td></tr>
+</table>
+
+<h3>6.2 Key Operations</h3>
+<table>
+  <tr><th>Op</th><th>Summary</th><th>Operands/Results</th></tr>
+  <tr><td><code>runtime.xrt_device</code></td><td>Create XRT device</td><td>deviceIndex:index → xrt::device</td></tr>
+  <tr><td><code>runtime.xrt_load_xclbin</code></td><td>Load .xclbin file</td><td>xrtDevice:xrt::device → xrt::uuid; attr: kernelName</td></tr>
+  <tr><td><code>runtime.xrt_kernel</code></td><td>Get kernel handle</td><td>xrtDevice, xrtXclbin → xrt::kernel; attr: kernelName</td></tr>
+  <tr><td><code>runtime.xrt_buffer</code></td><td>Allocate device buffer (BO)</td><td>xrtDevice, xrtKernel → xrt::bo; attrs: sizeInByte, argIndex</td></tr>
+  <tr><td><code>runtime.xrt_buffer_write_sync</code></td><td>Host → device transfer</td><td>xrtBuffer:xrt::bo, hostBuffer:ptr</td></tr>
+  <tr><td><code>runtime.xrt_buffer_sync_read</code></td><td>Device → host transfer</td><td>xrtBuffer:xrt::bo, hostBuffer:ptr</td></tr>
+  <tr><td><code>runtime.xrt_run</code></td><td>Launch kernel</td><td>xrtKernel, variadic xrt::bo → xrt::run</td></tr>
+  <tr><td><code>runtime.xrt_run_wait</code></td><td>Block until kernel done</td><td>xrtRun; attr: timeoutInMs</td></tr>
+  <tr><td><code>runtime.memref_to_pointer</code></td><td>Get raw pointer from memref</td><td>memref → ptr</td></tr>
+  <tr><td><code>runtime.memref_widen</code> / <code>runtime.memref_unwiden</code></td><td>Apply/undo vector widening on memref</td><td>memref → memref</td></tr>
+  <tr><td><code>runtime.load_binary_file</code></td><td>Load static weight binary</td><td>() → ptr; attr: globalName</td></tr>
+  <tr><td><code>runtime.chrono_now</code> / <code>runtime.chrono_duration</code></td><td>Performance timing</td><td>Timing utilities for benchmarking</td></tr>
+  <tr><td><code>runtime.xrt_logf</code></td><td>Printf-style logging</td><td>variadic → void; attr: format string</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="passes">7. All Passes (45+)</h2>
+
+<h3>General Passes</h3>
+<table>
+  <tr><th>Pass</th><th>Description</th></tr>
+  <tr><td><code>-streamtensor-comprehensive-bufferize</code></td><td>Bufferize the program (tensor → memref)</td></tr>
+  <tr><td><code>-streamtensor-fuse-linalg-elementwise-ops</code></td><td>Fuse elementwise linalg ops</td></tr>
+  <tr><td><code>-streamtensor-fuse-linalg-fill</code></td><td>Fuse linalg fill into generic op</td></tr>
+  <tr><td><code>-streamtensor-linalg-fake-quantize</code></td><td>Quantization (options: <code>-quan-bits</code>, <code>-const-quan-bits</code>)</td></tr>
+  <tr><td><code>-streamtensor-raise-scf-to-affine</code></td><td>Raise SCF loops to affine</td></tr>
+  <tr><td><code>-streamtensor-strip-annotations</code></td><td>Remove annotations by name</td></tr>
+  <tr><td><code>-streamtensor-transform-interpreter</code></td><td>Run transform sequences (options: entry-point, debug-payload-root-tag, delete-entry-point)</td></tr>
+</table>
+
+<h3>tensor_ext Dialect Passes</h3>
+<table>
+  <tr><th>Pass</th><th>Description</th></tr>
+  <tr><td><code>-streamtensor-convert-tensor-empty-to-instance</code></td><td>tensor.empty → tensor_ext.instance</td></tr>
+  <tr><td><code>-streamtensor-convert-tensor-primitive-to-linalg</code></td><td>Tensor primitives → linalg ops</td></tr>
+  <tr><td><code>-streamtensor-convert-tensor-to-linalg</code></td><td>tensor ops → linalg ops</td></tr>
+  <tr><td><code>-streamtensor-decompose-tensor-ops</code></td><td>Decompose complex tensor ops</td></tr>
+  <tr><td><code>-streamtensor-lower-pack-unpack</code></td><td>Lower tensor.pack/unpack (option: <code>-constant-folding</code>)</td></tr>
+  <tr><td><code>-streamtensor-raise-extract-slice-to-chunk</code></td><td>Raise extract_slice → tensor_ext.chunk</td></tr>
+</table>
+
+<h3>arith_ext Dialect Passes</h3>
+<table>
+  <tr><th>Pass</th><th>Description</th></tr>
+  <tr><td><code>-streamtensor-lower-quantize-ops</code></td><td>Lower quantize/dequantize to arithmetic</td></tr>
+</table>
+
+<h3>dataflow Dialect Passes</h3>
+<table>
+  <tr><th>Pass</th><th>Description</th></tr>
+  <tr><td><code>-streamtensor-buffer-kernel-interface</code></td><td>Buffer the interface of kernel ops</td></tr>
+  <tr><td><code>-streamtensor-convert-itensor-empty-to-instance</code></td><td>itensor_empty → itensor_instance</td></tr>
+  <tr><td><code>-streamtensor-convert-tensor-to-kernel</code></td><td>Tensor ops → kernel ops</td></tr>
+  <tr><td><code>-streamtensor-ensure-itensor-single-use</code></td><td>Insert forks for multi-use itensors</td></tr>
+  <tr><td><code>-streamtensor-fold-itensor</code></td><td>Fold trivial itensor instances</td></tr>
+  <tr><td><code>-streamtensor-lower-itensor-to-stream</code></td><td>ITensor ops → Stream ops</td></tr>
+  <tr><td><code>-streamtensor-materialize-kernel</code></td><td>Materialize kernel DMA tasks</td></tr>
+  <tr><td><code>-streamtensor-merge-data-driven-task</code></td><td>Merge <code>dataDriven</code>-flagged tasks</td></tr>
+  <tr><td><code>-streamtensor-merge-task-partition</code></td><td>Merge task partitions into one task</td></tr>
+  <tr><td><code>-streamtensor-pack-kernel-interface</code></td><td>Pack/unpack kernel tensor interfaces</td></tr>
+  <tr><td><code>-streamtensor-reduce-stream-depth</code></td><td>Cap FIFO depths (option: <code>-max-depth</code>, default 8192)</td></tr>
+  <tr><td><code>-streamtensor-simplify-task-structure</code></td><td>Simplify task hierarchy</td></tr>
+  <tr><td><code>-streamtensor-vectorize-itensor</code></td><td>Vectorize itensor elements</td></tr>
+  <tr><td><code>-streamtensor-widen-kernel-interface</code></td><td>Widen tensor interfaces (option: <code>-max-widen-bitwidth</code>)</td></tr>
+</table>
+
+<h3>hls Dialect Passes</h3>
+<table>
+  <tr><th>Pass</th><th>Description</th><th>Key Options</th></tr>
+  <tr><td><code>-streamtensor-allocate-memory</code></td><td>Assign memory kinds to buffers</td><td><code>-num-uram</code>, <code>-num-bram</code>, <code>-num-lut</code></td></tr>
+  <tr><td><code>-streamtensor-convert-dataflow-to-func</code></td><td>Structural dataflow → C++ functions</td><td><code>-create-kernel-wrapper</code></td></tr>
+  <tr><td><code>-streamtensor-generate-connectivity</code></td><td>Generate hls.connectivity from kernel tasks</td><td><code>-num-hbm-port</code>, <code>-assign-slr</code></td></tr>
+  <tr><td><code>-streamtensor-generate-directive</code></td><td>Generate HLS pragma attributes</td><td>—</td></tr>
+  <tr><td><code>-streamtensor-materialize-directive</code></td><td>Materialize pragma attrs to IR annotations</td><td>—</td></tr>
+</table>
+
+<h3>runtime Dialect Passes</h3>
+<table>
+  <tr><th>Pass</th><th>Description</th><th>Key Options</th></tr>
+  <tr><td><code>-streamtensor-convert-memref-to-pointer</code></td><td>memref → raw pointer for C++ emission</td><td>—</td></tr>
+  <tr><td><code>-streamtensor-generate-runtime-host-func</code></td><td>Generate XRT host function</td><td><code>-host-func-name</code>, <code>-timeout-in-ms</code></td></tr>
+</table>
+
+<h3>Transform Ops (used with transform dialect)</h3>
+<table>
+  <tr><th>TransformOp</th><th>Description</th><th>Key Attributes</th></tr>
+  <tr><td><code>transform.dataflow.convert_tiled_linalg_to_kernel</code></td><td>Convert a tiled linalg op into a KernelOp. The primary entry into the dataflow world.</td><td><code>input_vec_shapes</code>, <code>output_vec_shapes</code>, <code>max_vec_bitwidth</code>, <code>kernel_name</code>; handles: tiled_linalg_op, parallel_loops, reduction_loops → kernel, converted_linalg_op</td></tr>
+  <tr><td><code>transform.dataflow.fuse_kernels</code></td><td>Fuse multiple KernelOps into one fused kernel.</td><td><code>kernel_name</code>; handles: variadic kernels → fused_kernel</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="python">8. Python API</h2>
+
+<h3>8.1 CompileConfig — Master Configuration</h3>
+<table>
+  <tr><th>Parameter</th><th>Default</th><th>Purpose</th></tr>
+  <tr><td><code>default_tile_size</code></td><td>16</td><td>Linalg tile size for all ops</td></tr>
+  <tr><td><code>overall_unroll_size</code></td><td>16</td><td>Total loop unroll budget</td></tr>
+  <tr><td><code>max_fusion_cost</code></td><td>8000</td><td>Maximum on-chip memory (BRAM/URAM words) per fused kernel group</td></tr>
+  <tr><td><code>max_widen_bitwidth</code></td><td>512</td><td>Maximum bitwidth for memory interface widening (DDR/HBM bus width)</td></tr>
+  <tr><td><code>max_vectorize_bitwidth</code></td><td>4096</td><td>Maximum bitwidth for stream vectorization</td></tr>
+  <tr><td><code>partition</code></td><td>3</td><td>Number of SLRs / FPGA partitions</td></tr>
+  <tr><td><code>num_dsp</code></td><td>[2664, 2784, 2928]</td><td>DSP count per partition (Alveo U55C defaults)</td></tr>
+  <tr><td><code>num_uram</code></td><td>[320, 320, 320]</td><td>URAM count per partition</td></tr>
+  <tr><td><code>num_bram</code></td><td>[1200, 1152, 1200]</td><td>BRAM count per partition</td></tr>
+  <tr><td><code>num_lut</code></td><td>[386880, 364320, 395040]</td><td>LUT count per partition</td></tr>
+  <tr><td><code>resource_threshold</code></td><td>0.9</td><td>Max resource utilization fraction (0.9 = 90%)</td></tr>
+  <tr><td><code>num_hbm_port</code></td><td>32</td><td>Number of HBM memory channels to use</td></tr>
+  <tr><td><code>pipeline_rewinding</code></td><td>True</td><td>Enable pipeline rewinding optimization in LP FIFO sizing</td></tr>
+  <tr><td><code>constant_folding</code></td><td>True</td><td>Fold pack/unpack with constant weights at compile time</td></tr>
+  <tr><td><code>create_kernel_wrapper</code></td><td>False</td><td>Generate a top-level wrapper function around the kernel</td></tr>
+  <tr><td><code>task_partition_merging</code></td><td>False</td><td>Merge task partitions during bufferization</td></tr>
+  <tr><td><code>data_driven_task_merging</code></td><td>True</td><td>Merge data-driven tasks automatically</td></tr>
+  <tr><td><code>resource_allocation</code></td><td>True</td><td>Use LP-based resource allocation (vs. fixed heuristic)</td></tr>
+  <tr><td><code>assign_slr</code></td><td>False</td><td>Assign each task to a specific SLR</td></tr>
+  <tr><td><code>buffer_kernel_interface</code></td><td>False</td><td>Buffer (ping-pong) the kernel interface</td></tr>
+  <tr><td><code>timeout_in_ms</code></td><td>1000</td><td>Kernel execution timeout for host code</td></tr>
+  <tr><td><code>clock_freqhz</code></td><td>200000000</td><td>Target clock frequency (200 MHz)</td></tr>
+  <tr><td><code>fake_quantize</code></td><td>False</td><td>Enable quantization-aware compilation</td></tr>
+  <tr><td><code>quantize_bitwidth</code></td><td>8</td><td>Activation quantization precision</td></tr>
+  <tr><td><code>constant_quantize_bitwidth</code></td><td>8</td><td>Weight quantization precision</td></tr>
+  <tr><td><code>max_stream_depth</code></td><td>32768</td><td>Maximum allowed FIFO depth</td></tr>
+  <tr><td><code>op_ii_map</code></td><td>{'math.erf': 2}</td><td>Override initiation interval for specific ops</td></tr>
+  <tr><td><code>stream_size_map</code></td><td>None</td><td>Manually override specific edge FIFO depths</td></tr>
+  <tr><td><code>imbalance_threshold</code></td><td>1.0</td><td>Graph partition imbalance tolerance</td></tr>
+  <tr><td><code>stream_sizing_strategy</code></td><td>Conservative</td><td>LP sizing strategy: Conservative/Normal/Aggressive/Maximize</td></tr>
+  <tr><td><code>max_trials</code></td><td>0</td><td>DSE trials (0 = deterministic, >0 = Optuna-guided)</td></tr>
+</table>
+
+<h3>8.2 SynthesisConfig — Vitis HLS Tool Configuration</h3>
+<table>
+  <tr><th>Parameter</th><th>Default</th><th>Purpose</th></tr>
+  <tr><td><code>synth_tool_path</code></td><td><code>'v++'</code></td><td>Path to Vitis++ linker</td></tr>
+  <tr><td><code>sim_tool_path</code></td><td><code>'vitis-run'</code></td><td>Path to Vitis simulation runner</td></tr>
+  <tr><td><code>part</code></td><td><code>'xcu55c-fsvh2892-2L-e'</code></td><td>AMD Alveo U55C part number</td></tr>
+  <tr><td><code>platform</code></td><td><code>'xilinx_u55c_gen3x16_xdma_3_202210_1'</code></td><td>AMD platform string</td></tr>
+  <tr><td><code>vitis_hls_path</code></td><td><code>'/tools/Xilinx/Vitis_HLS/2024.1'</code></td><td>Vitis HLS installation</td></tr>
+  <tr><td><code>clock_freqhz</code></td><td>200000000</td><td>200 MHz clock</td></tr>
+  <tr><td><code>optimize</code></td><td><code>'3'</code></td><td>HLS optimization level (0-3, s, quick)</td></tr>
+  <tr><td><code>start_fifo_depth</code></td><td>16</td><td>Depth of start-signal synchronization FIFO</td></tr>
+</table>
+
+<h3>8.3 Design Space Classes</h3>
+<table>
+  <tr><th>Class</th><th>Purpose</th><th>Key Methods</th></tr>
+  <tr><td><code>LinalgTilingDesignSpace</code></td><td>Explore tile sizes, unroll factors, permutations, vectorization</td><td><code>intensity_aware_exploration(tile_size, unroll_size, max_trials)</code>, <code>naive_exploration()</code>, <code>get_linalg_op_naive_tile_sizes()</code>, <code>get_linalg_op_intensity_aware_unroll_sizes()</code></td></tr>
+  <tr><td><code>KernelFusionDesignSpace</code></td><td>Explore which kernels to fuse</td><td><code>greedy_fuse_kernels(max_cost)</code></td></tr>
+  <tr><td><code>StreamSizingDesignSpace</code></td><td>Compute optimal FIFO depths via LP</td><td><code>infer_edge_stream_patterns()</code>, <code>solve_edge_stream_depths(pipeline_rewinding, stream_size_map)</code>, <code>apply_edge_stream_depths()</code></td></tr>
+  <tr><td><code>GraphPartitionDesignSpace</code></td><td>Partition tasks across SLRs via ILP</td><td><code>solve_graph_partition(partition, num_dsp, num_uram, num_bram, num_lut, ...)</code></td></tr>
+</table>
+
+<h3>8.4 transforms Module — High-Level Pipeline Steps</h3>
+<table>
+  <tr><th>Function</th><th>What It Does</th></tr>
+  <tr><td><code>apply_linalg_optimization_transforms(module, fake_quantize, ...)</code></td><td>Stage 1: Linalg fusion, optional quantization</td></tr>
+  <tr><td><code>apply_intensity_aware_linalg_tiling(module, entry, tile_size, unroll, max_vec_bitwidth, max_trials, ...)</code></td><td>Stage 2: Tile linalg ops + convert to dataflow via transform sequences</td></tr>
+  <tr><td><code>apply_tensor_to_dataflow_conversion(module)</code></td><td>Stage 3: Convert remaining tensor ops to kernel ops</td></tr>
+  <tr><td><code>apply_greedy_kernel_fusion(module, entry, max_fusion_cost, ...)</code></td><td>Stage 4: Fuse kernels using KernelFusionDesignSpace</td></tr>
+  <tr><td><code>apply_dataflow_optimization_transforms(module, buffer_kernel_interface, max_widen_bitwidth, ...)</code></td><td>Stage 5: Pack, widen, materialize, fold, vectorize, ensure single-use</td></tr>
+  <tr><td><code>apply_bufferization(module, task_partition_merging, data_driven_task_merging, max_stream_depth)</code></td><td>Stage 6: Tensor → memref, lower itensor to stream</td></tr>
+  <tr><td><code>apply_linear_programming_resource_allocation(module, entry, pipeline_rewinding, strategy, ...)</code></td><td>Stage 7: LP FIFO sizing + ILP graph partition</td></tr>
+  <tr><td><code>apply_hls_codegen(module, num_hbm_port, create_kernel_wrapper, assign_slr)</code></td><td>Stage 8: Generate HLS directives, convert to functions</td></tr>
+  <tr><td><code>apply_runtime_codegen(module, host_func_name, timeout_in_ms)</code></td><td>Stage 9: Generate XRT host code</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="pipeline">9. Full Compilation Pipeline (from Python API)</h2>
+
+<p>The <code>Compiler.hls_pipeline()</code> method orchestrates these stages. This is the canonical compilation order:</p>
+
+<pre><code><span class="cm"># Pseudocode of the StreamTensor HLS pipeline</span>
+
+<span class="kw">def</span> hls_pipeline(module, config):
+
+    <span class="cm"># ── Stage 1: Linalg optimization ─────────────────────────────────</span>
+    apply_linalg_optimization_transforms(
+        module,
+        fake_quantize=config.fake_quantize,
+        quantize_bitwidth=config.quantize_bitwidth,
+        constant_quantize_bitwidth=config.constant_quantize_bitwidth,
+    )
+    <span class="cm"># Passes: fuse-linalg-elementwise-ops, fuse-linalg-fill,</span>
+    <span class="cm">#         linalg-fake-quantize (optional), generalize-named-ops</span>
+
+    <span class="cm"># ── Stage 2: Intensity-aware tiling + convert to dataflow ────────</span>
+    apply_intensity_aware_linalg_tiling(
+        module,
+        entry_name=<span class="st">"forward"</span>,
+        default_tile_size=config.default_tile_size,
+        overall_unroll_size=config.overall_unroll_size,
+        max_vec_bitwidth=config.max_widen_bitwidth,
+        convert_linalg_to_dataflow=<span class="kw">True</span>,
+        max_trials=config.max_trials,     <span class="cm"># 0 = deterministic</span>
+        op_ii_map=config.op_ii_map,
+    )
+    <span class="cm"># Uses LinalgTilingDesignSpace to find tile/unroll/vec params</span>
+    <span class="cm"># Then runs transform.dataflow.convert_tiled_linalg_to_kernel</span>
+    <span class="cm"># Passes: raise-scf-to-affine, lower-pack-unpack, ...</span>
+
+    <span class="cm"># ── Stage 3: Tensor → kernel ────────────────────────────────────</span>
+    apply_tensor_to_dataflow_conversion(module)
+    <span class="cm"># Passes: convert-tensor-to-kernel</span>
+
+    <span class="cm"># ── Stage 4: Greedy kernel fusion ──────────────────────────────</span>
+    apply_greedy_kernel_fusion(
+        module,
+        entry_name=<span class="st">"forward"</span>,
+        max_fusion_cost=config.max_fusion_cost,  <span class="cm"># 8000 BRAM/URAM words</span>
+    )
+    <span class="cm"># Uses KernelFusionDesignSpace.greedy_fuse_kernels()</span>
+    <span class="cm"># Runs transform.dataflow.fuse_kernels</span>
+
+    <span class="cm"># ── Stage 5: Dataflow optimization ─────────────────────────────</span>
+    apply_dataflow_optimization_transforms(
+        module,
+        buffer_kernel_interface=config.buffer_kernel_interface,
+        max_widen_bitwidth=config.max_widen_bitwidth,
+        constant_folding=config.constant_folding,
+    )
+    <span class="cm"># Passes: pack-kernel-interface, widen-kernel-interface,</span>
+    <span class="cm">#         materialize-kernel, fold-itensor, vectorize-itensor,</span>
+    <span class="cm">#         ensure-itensor-single-use, convert-itensor-empty-to-instance</span>
+    <span class="cm">#         simplify-task-structure, merge-data-driven-task (optional)</span>
+
+    <span class="cm"># ── Stage 6: Bufferization ─────────────────────────────────────</span>
+    apply_bufferization(
+        module,
+        task_partition_merging=config.task_partition_merging,
+        data_driven_task_merging=config.data_driven_task_merging,
+        max_stream_depth=config.max_stream_depth,
+    )
+    <span class="cm"># Passes: comprehensive-bufferize, lower-itensor-to-stream,</span>
+    <span class="cm">#         reduce-stream-depth, merge-task-partition (optional),</span>
+    <span class="cm">#         merge-data-driven-task (optional)</span>
+
+    <span class="cm"># ── Stage 7: LP resource allocation ────────────────────────────</span>
+    if config.resource_allocation:
+        <span class="cm"># Profile tasks with Vitis HLS (parallel synthesis)</span>
+        apply_task_profiling(module, config=synthesis_config)
+
+        apply_linear_programming_resource_allocation(
+            module,
+            entry_name=<span class="st">"forward"</span>,
+            pipeline_rewinding=config.pipeline_rewinding,
+            stream_size_map=config.stream_size_map,
+            strategy=config.stream_sizing_strategy,
+            partition=config.partition,
+            num_dsp=config.num_dsp,
+            num_uram=config.num_uram,
+            num_bram=config.num_bram,
+            num_lut=config.num_lut,
+            max_widen_bitwidth=config.max_widen_bitwidth,
+            imbalance_threshold=config.imbalance_threshold,
+        )
+        <span class="cm"># Uses StreamSizingDesignSpace + GraphPartitionDesignSpace</span>
+        <span class="cm"># Pass: allocate-memory, reduce-stream-depth</span>
+
+    <span class="cm"># ── Stage 8: HLS code generation ───────────────────────────────</span>
+    apply_hls_codegen(
+        module,
+        num_hbm_port=config.num_hbm_port,
+        create_kernel_wrapper=config.create_kernel_wrapper,
+        assign_slr=config.assign_slr,
+    )
+    <span class="cm"># Passes: generate-directive, materialize-directive,</span>
+    <span class="cm">#         convert-dataflow-to-func, generate-connectivity</span>
+
+    <span class="cm"># ── Stage 9: Runtime (XRT) code generation ─────────────────────</span>
+    apply_runtime_codegen(
+        module,
+        host_func_name=<span class="st">"host"</span>,
+        timeout_in_ms=config.timeout_in_ms,
+    )
+    <span class="cm"># Passes: generate-runtime-host-func, convert-memref-to-pointer</span>
+
+    return module</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="delta">10. What This Changes in Our Implementation Plan</h2>
+
+<div class="box red">
+  <span class="lbl">Major Revision Required</span>
+  The original plan was based on the paper alone. The docs reveal the actual implementation architecture, which differs in several important ways.
+</div>
+
+<h3>10.1 Namespace / Dialect Structure</h3>
+<table>
+  <tr><th>Aspect</th><th>Original Plan (paper-based)</th><th>Actual (docs-based)</th></tr>
+  <tr><td>ITensorType location</td><td>Add to HIDA's <code>hls</code> dialect</td><td>Lives in a new <code>dataflow</code> dialect</td></tr>
+  <tr><td>StreamType</td><td>Keep HIDA's <code>hls.stream</code></td><td>New <code>dataflow.stream</code> with <code>memorySpace</code> attribute</td></tr>
+  <tr><td>KernelOp / TaskOp</td><td>Add to HIDA's <code>hls</code> dialect</td><td>In the new <code>dataflow</code> dialect</td></tr>
+  <tr><td>Connectivity/SLR ops</td><td>N/A (not in paper)</td><td>Separate <code>hls</code> dialect with 5 ops</td></tr>
+  <tr><td>Quantization</td><td>Not addressed</td><td>Separate <code>arith_ext</code> dialect</td></tr>
+  <tr><td>Tensor widening</td><td>Part of widening pass</td><td>Separate <code>tensor_ext</code> dialect ops</td></tr>
+  <tr><td>XRT host code</td><td>Generated C++ string output</td><td>Separate <code>runtime</code> dialect, then lowered to C++</td></tr>
+</table>
+
+<h3>10.2 New Operations Discovered</h3>
+<ul>
+  <li><code>dataflow.itensor_buffer</code> — the "converter buffer" operation (Algorithm 1 in paper). Has <code>bufferType</code>, <code>loopIndex</code>, <code>dimIndex</code> attrs. This is distinct from <code>ITensorConverterOp</code> in our plan.</li>
+  <li><code>dataflow.itensor_reassociate</code> — for reshape/expand/collapse of iteration space. Has <code>expandShape</code>, <code>shapeReassociation</code>, <code>expandIteration</code>, <code>iterationReassociation</code> attrs.</li>
+  <li><code>dataflow.buffer</code> — on-chip buffer (memref), alongside stream ops</li>
+  <li><code>tensor_ext.widen</code> / <code>tensor_ext.unwiden</code> — explicit widening ops on tensors</li>
+  <li><code>tensor_ext.chunk</code> — tensor-level chunk (maps to <code>dataflow.itensor_chunk</code>)</li>
+  <li>All <code>runtime.*</code> ops — XRT abstraction layer</li>
+</ul>
+
+<h3>10.3 TaskOp is Different</h3>
+<p>The actual <code>dataflow.task</code> has <code>dataDriven</code> and <code>kernel</code> boolean flags — not the same structure as HIDA's <code>TaskOp</code>. The <code>inits</code> are optional (dest-carried), and the task is NOT always isolated from above.</p>
+
+<h3>10.4 Key Pipeline Differences</h3>
+<ul>
+  <li>The conversion from linalg to dataflow happens via <strong>Transform Dialect sequences</strong>, not a monolithic pass. The <code>transform.dataflow.convert_tiled_linalg_to_kernel</code> op is the entry point.</li>
+  <li>Kernel fusion is driven by <strong>Python DSE code</strong> (<code>KernelFusionDesignSpace.greedy_fuse_kernels()</code>) which then writes a transform sequence back to the MLIR, run by <code>-streamtensor-transform-interpreter</code>.</li>
+  <li>LP FIFO sizing is in <strong>Python</strong> (<code>StreamSizingDesignSpace</code>), not a C++ pass.</li>
+  <li>Graph partitioning is in <strong>Python</strong> (<code>GraphPartitionDesignSpace</code>).</li>
+  <li>The overall orchestrator is the <strong>Python <code>Compiler</code> class</strong>.</li>
+</ul>
+
+<h3>10.5 Updated Implementation Priority</h3>
+<ol>
+  <li><strong>Create <code>dataflow</code> dialect</strong> with ITensorType, StreamType, KernelOp, TaskOp, all ITensor/Stream ops (21 ops)</li>
+  <li><strong>Create <code>tensor_ext</code> dialect</strong> with 4 ops + VectorizationEncodingAttr</li>
+  <li><strong>Create <code>arith_ext</code> dialect</strong> with 4 quantization ops</li>
+  <li><strong>Create <code>hls</code> dialect (StreamTensor version)</strong> — can reuse HIDA's namespace with new ops added, or create parallel namespace</li>
+  <li><strong>Create <code>runtime</code> dialect</strong> with 18 ops + 2 types</li>
+  <li><strong>Implement all 45+ passes</strong> as listed above</li>
+  <li><strong>Implement Transform Ops</strong>: <code>convert_tiled_linalg_to_kernel</code>, <code>fuse_kernels</code></li>
+  <li><strong>Implement Python DSE layer</strong>: LinalgTilingDesignSpace, KernelFusionDesignSpace, StreamSizingDesignSpace, GraphPartitionDesignSpace</li>
+  <li><strong>Implement Python compiler orchestration</strong>: Compiler class, transforms module, profiler, synthesizer</li>
+</ol>
+
+</div>
+</body>
+</html>

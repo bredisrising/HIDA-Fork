@@ -108,7 +108,7 @@ def TaskOp : HLSOp<"dataflow.task", [
 }
 
 def YieldOp : HLSOp<"dataflow.yield", [NoMemoryEffect, ReturnLike, Terminator,
-      ParentOneOf<["DispatchOp", "TaskOp"]>]> {
+      ParentOneOf<["DispatchOp", "TaskOp", "KernelOp"]>]> {
   let summary = "Terminate and yield results of a dispatch or task op";
 
   let arguments = (ins Variadic<AnyType>:$results);
@@ -514,6 +514,348 @@ def VectorInitOp : HLSOp<"vector.init", [NoMemoryEffect]> {
 
   let results = (outs AnyVector:$output);
   let assemblyFormat = "attr-dict `:` type($output)";
+}
+
+//===----------------------------------------------------------------------===//
+// StreamTensor Structure Operations (Phase 2)
+//===----------------------------------------------------------------------===//
+
+def KernelOp : HLSOp<"dataflow.kernel", [IsolatedFromAbove, AffineScope,
+      SingleBlockImplicitTerminator<"YieldOp">,
+      ParentOneOf<["func::FuncOp"]>]> {
+  let summary = "Top-level StreamTensor dataflow kernel";
+  let description = [{
+    Represents a top-level dataflow kernel in the StreamTensor model. Contains
+    STTaskOp operations that communicate via itensor values. At the kernel
+    boundary, tensor arguments are conceptually converted to/from itensor —
+    these become implicit DMAs during materialization.
+
+    The kernel takes tensor inputs and produces tensor results. Internally,
+    the body operates on ITensorType values.
+  }];
+
+  let arguments = (ins Variadic<AnyType>:$inputs, OptionalAttr<StrAttr>:$sym_name);
+  let results = (outs Variadic<AnyType>:$results);
+  let regions = (region SizedRegion<1>:$body);
+
+  let assemblyFormat = [{
+    ($sym_name^)? `(` $inputs `)` attr-dict-with-keyword `:`
+    functional-type($inputs, $results) $body
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    /// Get the terminator yield op.
+    YieldOp getYieldOp();
+  }];
+}
+
+def STTaskOp : HLSOp<"dataflow.st_task", [
+      RecursiveMemoryEffects,
+      SingleBlockImplicitTerminator<"STYieldOp">,
+      HasParent<"KernelOp">]> {
+  let summary = "StreamTensor dataflow task within a kernel";
+  let description = [{
+    Represents a dataflow task within a KernelOp. Uses destination-carried
+    semantics for itensor: `inits` operands receive itensor destinations, and
+    `results` are updated itensors. The task has a transparent region (not
+    isolated) to allow capturing values from the enclosing kernel.
+  }];
+
+  let arguments = (ins Variadic<AnyITensor>:$inits, OptionalAttr<StrAttr>:$name);
+  let results = (outs Variadic<AnyITensor>:$results);
+  let regions = (region SizedRegion<1>:$body);
+
+  let assemblyFormat = [{
+    ($name^)? (`ins` `(` $inits^ `:` type($inits) `)`)? attr-dict-with-keyword
+    ( `:` type($results)^ )? $body
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    /// Get the parent kernel op.
+    KernelOp getKernelOp();
+
+    /// Get the terminator yield op.
+    STYieldOp getSTYieldOp();
+  }];
+}
+
+def STYieldOp : HLSOp<"dataflow.st_yield", [NoMemoryEffect, ReturnLike,
+      Terminator, HasParent<"STTaskOp">]> {
+  let summary = "Terminate and yield results of an STTaskOp";
+
+  let arguments = (ins Variadic<AnyITensor>:$results);
+  let assemblyFormat = "$results attr-dict `:` type($results)";
+
+  let builders = [OpBuilder<(ins), "build($_builder, $_state, llvm::None);">];
+}
+
+//===----------------------------------------------------------------------===//
+// ITensor Operations (StreamTensor Table 1)
+//===----------------------------------------------------------------------===//
+
+def ITensorEmptyOp : HLSOp<"itensor.empty", [NoMemoryEffect]> {
+  let summary = "Create a placeholder itensor (no FIFO backing)";
+  let description = [{
+    Creates an itensor value without allocating a concrete FIFO. Used as a
+    placeholder during itensor graph construction. Later converted to
+    ITensorInstanceOp when the graph is finalized.
+  }];
+
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = "attr-dict `:` type($result)";
+}
+
+def ITensorInstanceOp : HLSOp<"itensor.instance", [NoMemoryEffect]> {
+  let summary = "Create a concrete itensor FIFO instance";
+  let description = [{
+    Creates an itensor value backed by a concrete FIFO. The depth attribute
+    specifies the FIFO depth (number of tiles that can be buffered).
+  }];
+
+  let arguments = (ins DefaultValuedAttr<I64Attr, "1">:$depth);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = "attr-dict `:` type($result)";
+}
+
+def ITensorReadOp : HLSOp<"itensor.read", [
+      DeclareOpInterfaceMethods<ITensorOpInterface>]> {
+  let summary = "Read one tile from an itensor FIFO";
+  let description = [{
+    Pulls one tensor tile from the source itensor FIFO. The `init` operand
+    provides the initial value for the destination tensor. Returns the
+    tensor tile read from the FIFO.
+  }];
+
+  let arguments = (ins AnyITensor:$source, AnyRankedTensor:$init);
+  let results = (outs AnyRankedTensor:$result);
+  let assemblyFormat = [{
+    $source `,` $init attr-dict `:` type($source) `,` type($init) `->` type($result)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def ITensorWriteOp : HLSOp<"itensor.write", [
+      DeclareOpInterfaceMethods<ITensorOpInterface>]> {
+  let summary = "Write one tile to an itensor FIFO";
+  let description = [{
+    Pushes a value to the destination itensor FIFO. Uses destination-carried
+    semantics: the `dest` itensor is passed in, the write appends to it, and
+    the `result` is the updated itensor. This enables SSA-based tracking of
+    FIFO state.
+  }];
+
+  let arguments = (ins AnyType:$value, AnyITensor:$dest);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = [{
+    $value `,` $dest attr-dict `:` type($value) `,` type($dest) `->` type($result)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def ITensorReassociateOp : HLSOp<"itensor.reassociate", [NoMemoryEffect,
+      DeclareOpInterfaceMethods<ITensorOpInterface>]> {
+  let summary = "Reassociate element shape/iteration space dimensions";
+  let description = [{
+    Reassociates the dimensions of the element shape and iteration space,
+    analogous to tensor.expand_shape/collapse_shape. The source and result
+    itensor types must have the same total data volume.
+  }];
+
+  let arguments = (ins AnyITensor:$source);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = "$source attr-dict `:` type($source) `to` type($result)";
+
+  let hasVerifier = 1;
+}
+
+def ITensorConverterOp : HLSOp<"itensor.converter", [
+      DeclareOpInterfaceMethods<ITensorOpInterface>]> {
+  let summary = "Convert between incompatible itensor layouts";
+  let description = [{
+    Performs layout conversion between two itensor types with different element
+    shapes, iteration spaces, or iteration maps. Internally uses a ping-pong
+    buffer whose shape is determined by Algorithm 1 from the StreamTensor paper.
+  }];
+
+  let arguments = (ins AnyITensor:$source,
+      OptionalAttr<I64ArrayAttr>:$bufferShape,
+      DefaultValuedAttr<I64Attr, "0">:$sharedLoops);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = [{
+    $source attr-dict `:` type($source) `to` type($result)
+  }];
+
+  let hasVerifier = 1;
+
+  let extraClassDeclaration = [{
+    bool isLayoutChanging() { return true; }
+  }];
+}
+
+def ITensorForkOp : HLSOp<"itensor.fork", [NoMemoryEffect,
+      DeclareOpInterfaceMethods<ITensorOpInterface>]> {
+  let summary = "Broadcast one itensor to multiple consumers";
+  let description = [{
+    Duplicates a single itensor stream to multiple identical consumers.
+    All results have the same type as the source.
+  }];
+
+  let arguments = (ins AnyITensor:$source);
+  let results = (outs Variadic<AnyITensor>:$results);
+  let assemblyFormat = [{
+    $source attr-dict `:` type($source) `to` type($results)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def ITensorJoinOp : HLSOp<"itensor.join", [NoMemoryEffect,
+      DeclareOpInterfaceMethods<ITensorOpInterface>]> {
+  let summary = "Round-robin join from multiple producers";
+  let description = [{
+    Joins multiple itensor streams into a single result via round-robin.
+    All sources must have the same itensor type.
+  }];
+
+  let arguments = (ins Variadic<AnyITensor>:$sources);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = [{
+    $sources attr-dict `:` type($sources) `to` type($result)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def ITensorChunkOp : HLSOp<"itensor.chunk", [NoMemoryEffect,
+      DeclareOpInterfaceMethods<ITensorOpInterface>]> {
+  let summary = "Split one itensor into multiple along a dimension";
+
+  let arguments = (ins AnyITensor:$source, I64Attr:$dimension,
+                       I64Attr:$numChunks);
+  let results = (outs Variadic<AnyITensor>:$results);
+  let assemblyFormat = [{
+    $source attr-dict `:` type($source) `to` type($results)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def ITensorConcatOp : HLSOp<"itensor.concat", [NoMemoryEffect,
+      DeclareOpInterfaceMethods<ITensorOpInterface>]> {
+  let summary = "Concatenate multiple itensors along a dimension";
+
+  let arguments = (ins Variadic<AnyITensor>:$sources, I64Attr:$dimension);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = [{
+    $sources attr-dict `:` type($sources) `to` type($result)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def ITensorCastOp : HLSOp<"itensor.cast", [NoMemoryEffect,
+      DeclareOpInterfaceMethods<ITensorOpInterface>]> {
+  let summary = "Cast between compatible itensor types without layout change";
+  let description = [{
+    Casts between two ITensorType values that are structurally compatible
+    (same data volume) but differ in static vs dynamic dimensions or other
+    compatible shape differences. No data movement occurs.
+  }];
+
+  let arguments = (ins AnyITensor:$source);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = "$source attr-dict `:` type($source) `to` type($result)";
+
+  let hasVerifier = 1;
+  let hasFolder = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Stream-Level Bridge Operations (StreamTensor Table 2)
+//===----------------------------------------------------------------------===//
+
+def ITensorToStreamOp : HLSOp<"itensor.to_stream", [NoMemoryEffect]> {
+  let summary = "Convert an itensor FIFO to a scalar stream channel";
+  let description = [{
+    Bridge from the itensor abstraction level to the lower-level stream
+    abstraction. The itensor's element tiles are serialized into a scalar
+    stream. Must be eliminated during lowering/bufferization.
+  }];
+
+  let arguments = (ins AnyITensor:$source);
+  let results = (outs AnyStream:$stream);
+  let assemblyFormat = [{
+    $source attr-dict `:` type($source) `to` type($stream)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def StreamToITensorOp : HLSOp<"stream.to_itensor", [NoMemoryEffect]> {
+  let summary = "Convert a scalar stream channel to an itensor FIFO";
+  let description = [{
+    Bridge from the lower-level stream abstraction back to the itensor
+    level. Scalar stream elements are reassembled into tensor tiles
+    according to the result itensor type. Must be eliminated during
+    lowering/bufferization.
+  }];
+
+  let arguments = (ins AnyStream:$stream);
+  let results = (outs AnyITensor:$result);
+  let assemblyFormat = [{
+    $stream attr-dict `:` type($stream) `to` type($result)
+  }];
+
+  let hasVerifier = 1;
+}
+
+def StreamBufferOp : HLSOp<"dataflow.stream_buffer", [
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+  let summary = "Declare a ping-pong (double) stream buffer";
+  let description = [{
+    Creates a ping-pong buffer for stream data. Unlike BufferOp which wraps a
+    memref, StreamBufferOp is specifically designed for the streaming dataflow
+    model where data flows through a double-buffered on-chip memory to overlap
+    DMA transfers with computation.
+
+    The `depth` attribute controls the number of ping-pong stages (typically 2).
+    The buffer holds tensor tiles of the specified shape.
+  }];
+
+  let arguments = (ins I32Attr:$depth,
+                       OptionalAttr<TypedAttrInterface>:$init_value);
+  let results = (outs AnyBuffer:$memref);
+  let assemblyFormat = "attr-dict `:` type($memref)";
+
+  let hasVerifier = 1;
+  let builders = [
+    OpBuilder<(ins "mlir::Type":$memref),
+        "build($_builder, $_state, memref, 2, nullptr);">
+  ];
+}
+
+def StreamCastOp : HLSOp<"dataflow.stream_cast", [NoMemoryEffect]> {
+  let summary = "Cast between compatible stream types";
+  let description = [{
+    Casts between two stream types that carry the same underlying data type
+    but may differ in depth. No data movement occurs — this is purely a type
+    system operation for connecting streams with different depth annotations.
+  }];
+
+  let arguments = (ins AnyStream:$source);
+  let results = (outs AnyStream:$result);
+  let assemblyFormat = [{
+    $source attr-dict `:` type($source) `to` type($result)
+  }];
+
+  let hasVerifier = 1;
+  let hasFolder = 1;
 }
 
 #endif // SCALEHLS_DIALECT_HLS_HLSOPS_TD

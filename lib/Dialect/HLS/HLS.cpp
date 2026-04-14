@@ -7,6 +7,7 @@
 #include "mlir/Analysis/Liveness.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/IR/AffineMap.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/IntegerSet.h"
 #include "scalehls/Dialect/HLS/Utils.h"
@@ -1439,6 +1440,390 @@ void hls::setRuntimeAttr(Operation *op) {
 }
 bool hls::hasRuntimeAttr(Operation *op) {
   return op->hasAttrOfType<UnitAttr>("runtime");
+}
+
+//===----------------------------------------------------------------------===//
+// ITensorType
+//===----------------------------------------------------------------------===//
+
+/// Custom parser for ITensorType.
+/// Format: `<` element-type `,` `[` shape `]` `,` `[` trips `]` `*` `[` steps `]` `,` affine-map `>`
+Type ITensorType::parse(AsmParser &parser) {
+  if (parser.parseLess())
+    return {};
+
+  Type elementType;
+  if (parser.parseType(elementType) || parser.parseComma())
+    return {};
+
+  // Parse element shape: [dim, dim, ...]
+  SmallVector<int64_t> elementShape;
+  if (parser.parseLSquare())
+    return {};
+  if (parser.parseOptionalRSquare()) {
+    // Non-empty shape
+    int64_t dim;
+    if (parser.parseInteger(dim))
+      return {};
+    elementShape.push_back(dim);
+    while (!parser.parseOptionalComma()) {
+      if (parser.parseInteger(dim))
+        return {};
+      elementShape.push_back(dim);
+    }
+    if (parser.parseRSquare())
+      return {};
+  }
+
+  if (parser.parseComma())
+    return {};
+
+  // Parse iterTripCounts: [count, count, ...]
+  SmallVector<int64_t> iterTripCounts;
+  if (parser.parseLSquare())
+    return {};
+  if (parser.parseOptionalRSquare()) {
+    int64_t val;
+    if (parser.parseInteger(val))
+      return {};
+    iterTripCounts.push_back(val);
+    while (!parser.parseOptionalComma()) {
+      if (parser.parseInteger(val))
+        return {};
+      iterTripCounts.push_back(val);
+    }
+    if (parser.parseRSquare())
+      return {};
+  }
+
+  // Parse '*'
+  if (parser.parseStar())
+    return {};
+
+  // Parse iterSteps: [step, step, ...]
+  SmallVector<int64_t> iterSteps;
+  if (parser.parseLSquare())
+    return {};
+  if (parser.parseOptionalRSquare()) {
+    int64_t val;
+    if (parser.parseInteger(val))
+      return {};
+    iterSteps.push_back(val);
+    while (!parser.parseOptionalComma()) {
+      if (parser.parseInteger(val))
+        return {};
+      iterSteps.push_back(val);
+    }
+    if (parser.parseRSquare())
+      return {};
+  }
+
+  if (parser.parseComma())
+    return {};
+
+  // Parse affine map attribute to avoid >> ambiguity.
+  AffineMapAttr iterationMapAttr;
+  if (parser.parseAttribute(iterationMapAttr))
+    return {};
+  AffineMap iterationMap = iterationMapAttr.getValue();
+
+  if (parser.parseGreater())
+    return {};
+
+  return ITensorType::getChecked(
+      parser.getEncodedSourceLoc(parser.getCurrentLocation()),
+      parser.getContext(), elementType, elementShape, iterTripCounts, iterSteps,
+      iterationMap);
+}
+
+/// Custom printer for ITensorType.
+void ITensorType::print(AsmPrinter &printer) const {
+  printer << "<";
+  printer.printType(getElementType());
+  printer << ", [";
+  llvm::interleaveComma(getElementShape(), printer);
+  printer << "], [";
+  llvm::interleaveComma(getIterTripCounts(), printer);
+  printer << "] * [";
+  llvm::interleaveComma(getIterSteps(), printer);
+  printer << "], ";
+  printer.printAttribute(AffineMapAttr::get(getIterationMap()));
+  printer << ">";
+}
+
+/// Verification for ITensorType parameters.
+LogicalResult ITensorType::verify(function_ref<InFlightDiagnostic()> emitError,
+                                  Type elementType,
+                                  ArrayRef<int64_t> elementShape,
+                                  ArrayRef<int64_t> iterTripCounts,
+                                  ArrayRef<int64_t> iterSteps,
+                                  AffineMap iterationMap) {
+  if (iterTripCounts.size() != iterSteps.size())
+    return emitError() << "iterTripCounts and iterSteps must have the same "
+                          "number of dimensions, got "
+                       << iterTripCounts.size() << " vs " << iterSteps.size();
+
+  if (iterationMap.getNumInputs() != iterTripCounts.size())
+    return emitError() << "iterationMap inputs (" << iterationMap.getNumInputs()
+                       << ") must match iteration dimensions ("
+                       << iterTripCounts.size() << ")";
+
+  if (iterationMap.getNumResults() != elementShape.size())
+    return emitError() << "iterationMap results ("
+                       << iterationMap.getNumResults()
+                       << ") must match element shape rank ("
+                       << elementShape.size() << ")";
+
+  return success();
+}
+
+/// Compute the full data shape from element shape × iteration space.
+SmallVector<int64_t> ITensorType::getDataShape() const {
+  SmallVector<int64_t> dataShape;
+  auto elemShape = getElementShape();
+  for (unsigned i = 0; i < elemShape.size(); ++i)
+    dataShape.push_back(elemShape[i]);
+  return dataShape;
+}
+
+/// Return total number of tensor tiles produced.
+int64_t ITensorType::getTotalTiles() const {
+  int64_t total = 1;
+  for (int64_t tc : getIterTripCounts())
+    total *= tc;
+  return total;
+}
+
+/// Check layout compatibility.
+bool ITensorType::isLayoutCompatible(ITensorType other) const {
+  return getElementType() == other.getElementType() &&
+         getElementShape() == other.getElementShape() &&
+         getIterTripCounts() == other.getIterTripCounts() &&
+         getIterSteps() == other.getIterSteps() &&
+         getIterationMap() == other.getIterationMap();
+}
+
+//===----------------------------------------------------------------------===//
+// KernelOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult KernelOp::verify() {
+  if (getResultTypes() != getYieldOp().getOperandTypes())
+    return emitOpError("yield type doesn't align with result type");
+  return success();
+}
+
+YieldOp KernelOp::getYieldOp() {
+  return cast<YieldOp>(getBody().front().getTerminator());
+}
+
+//===----------------------------------------------------------------------===//
+// STTaskOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult STTaskOp::verify() {
+  auto yieldOp = getSTYieldOp();
+  if (getResultTypes() != yieldOp.getOperandTypes())
+    return emitOpError("st_yield type doesn't align with result type");
+
+  // Verify that inits and results have matching types.
+  if (getNumResults() != getInits().size())
+    return emitOpError("number of results must match number of inits");
+  for (unsigned i = 0; i < getNumResults(); ++i) {
+    if (getResult(i).getType() != getInits()[i].getType())
+      return emitOpError("result type at index ")
+             << i << " doesn't match init type";
+  }
+  return success();
+}
+
+KernelOp STTaskOp::getKernelOp() {
+  return (*this)->getParentOfType<KernelOp>();
+}
+
+STYieldOp STTaskOp::getSTYieldOp() {
+  return cast<STYieldOp>(getBody().front().getTerminator());
+}
+
+//===----------------------------------------------------------------------===//
+// ITensor Operations
+//===----------------------------------------------------------------------===//
+
+LogicalResult ITensorReadOp::verify() {
+  auto srcType = getSource().getType().cast<ITensorType>();
+  auto resultType = getResult().getType().cast<RankedTensorType>();
+
+  // Result tensor shape must match the itensor's element shape.
+  if (resultType.getShape() != ArrayRef<int64_t>(srcType.getElementShape()))
+    return emitOpError("result tensor shape must match itensor element shape");
+
+  // Element types must match.
+  if (resultType.getElementType() != srcType.getElementType())
+    return emitOpError("result element type must match itensor element type");
+
+  return success();
+}
+
+LogicalResult ITensorWriteOp::verify() {
+  auto destType = getDest().getType().cast<ITensorType>();
+  auto resultType = getResult().getType().cast<ITensorType>();
+
+  // Result and dest must have the same itensor type.
+  if (destType != resultType)
+    return emitOpError("result type must match dest type");
+
+  return success();
+}
+
+LogicalResult ITensorReassociateOp::verify() {
+  auto srcType = getSource().getType().cast<ITensorType>();
+  auto resType = getResult().getType().cast<ITensorType>();
+
+  // Element types must match.
+  if (srcType.getElementType() != resType.getElementType())
+    return emitOpError("source and result element types must match");
+
+  // Total data volume must be preserved.
+  if (srcType.getTotalTiles() != resType.getTotalTiles())
+    return emitOpError("total tile count must be preserved");
+
+  return success();
+}
+
+LogicalResult ITensorConverterOp::verify() {
+  auto srcType = getSource().getType().cast<ITensorType>();
+  auto resType = getResult().getType().cast<ITensorType>();
+
+  // Element types must match.
+  if (srcType.getElementType() != resType.getElementType())
+    return emitOpError("source and result element types must match");
+
+  return success();
+}
+
+LogicalResult ITensorForkOp::verify() {
+  auto srcType = getSource().getType().cast<ITensorType>();
+  for (auto result : getResults()) {
+    if (result.getType() != srcType)
+      return emitOpError("all fork results must match source type");
+  }
+  if (getNumResults() < 2)
+    return emitOpError("fork must have at least 2 results");
+  return success();
+}
+
+LogicalResult ITensorJoinOp::verify() {
+  auto resType = getResult().getType().cast<ITensorType>();
+  for (auto source : getSources()) {
+    if (source.getType() != resType)
+      return emitOpError("all join sources must match result type");
+  }
+  if (getSources().size() < 2)
+    return emitOpError("join must have at least 2 sources");
+  return success();
+}
+
+LogicalResult ITensorChunkOp::verify() {
+  if (getNumResults() != static_cast<unsigned>(getNumChunks()))
+    return emitOpError("number of results must match numChunks");
+  return success();
+}
+
+LogicalResult ITensorConcatOp::verify() {
+  if (getSources().size() < 2)
+    return emitOpError("concat must have at least 2 sources");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// ITensorCastOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ITensorCastOp::verify() {
+  auto srcType = getSource().getType().cast<ITensorType>();
+  auto resType = getResult().getType().cast<ITensorType>();
+
+  // Element types must match.
+  if (srcType.getElementType() != resType.getElementType())
+    return emitOpError("source and result element types must match");
+
+  return success();
+}
+
+OpFoldResult ITensorCastOp::fold(ArrayRef<Attribute>) {
+  // Fold away no-op casts where source and result type are identical.
+  if (getSource().getType() == getResult().getType())
+    return getSource();
+  return {};
+}
+
+//===----------------------------------------------------------------------===//
+// ITensorToStreamOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ITensorToStreamOp::verify() {
+  auto itensorType = getSource().getType().cast<ITensorType>();
+  auto streamType = getStream().getType().cast<StreamType>();
+
+  // The stream's element type must match the itensor's scalar element type.
+  if (itensorType.getElementType() != streamType.getElementType())
+    return emitOpError("itensor element type must match stream element type");
+
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// StreamToITensorOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamToITensorOp::verify() {
+  auto streamType = getStream().getType().cast<StreamType>();
+  auto itensorType = getResult().getType().cast<ITensorType>();
+
+  // The stream's element type must match the itensor's scalar element type.
+  if (streamType.getElementType() != itensorType.getElementType())
+    return emitOpError("stream element type must match itensor element type");
+
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// StreamBufferOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamBufferOp::verify() {
+  if (getDepth() < 1)
+    return emitOpError("depth must be at least 1");
+  return success();
+}
+
+void StreamBufferOp::getEffects(
+    SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
+        &effects) {
+  effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
+                       SideEffects::DefaultResource::get());
+}
+
+//===----------------------------------------------------------------------===//
+// StreamCastOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult StreamCastOp::verify() {
+  auto srcType = getSource().getType().cast<StreamType>();
+  auto resType = getResult().getType().cast<StreamType>();
+
+  // Element types must match — only depth may differ.
+  if (srcType.getElementType() != resType.getElementType())
+    return emitOpError("source and result stream element types must match");
+
+  return success();
+}
+
+OpFoldResult StreamCastOp::fold(ArrayRef<Attribute>) {
+  // Fold away no-op casts where source and result type are identical.
+  if (getSource().getType() == getResult().getType())
+    return getSource();
+  return {};
 }
 
 //===----------------------------------------------------------------------===//
