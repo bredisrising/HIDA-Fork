@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HIDA Explained: A Beginner's Guide</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+    --border: #30363d; --text: #c9d1d9; --text-bright: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --green: #3fb950;
+    --yellow: #d29922; --red: #f85149; --purple: #bc8cff;
+    --orange: #ffa657; --teal: #39d353; --code-bg: #1a1f2b;
+    --pink: #f778ba;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif; font-size: 16px; line-height: 1.8; }
+  .container { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 2.4em; color: var(--text-bright); margin-bottom: 8px; }
+  .subtitle { color: var(--muted); font-size: 1.1em; margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 24px; }
+  h2 { font-size: 1.7em; color: var(--accent); margin: 56px 0 20px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1.25em; color: var(--purple); margin: 36px 0 12px; }
+  h4 { font-size: 1.05em; color: var(--orange); margin: 24px 0 8px; }
+  p { margin-bottom: 14px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  strong { color: var(--text-bright); }
+  code { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 0.88em; background: var(--code-bg); color: var(--orange); padding: 2px 7px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; overflow-x: auto; margin: 16px 0; line-height: 1.55; }
+  pre code { background: none; color: var(--text); padding: 0; font-size: 0.88em; }
+  .kw { color: var(--purple); font-weight: 600; }
+  .ty { color: var(--teal); }
+  .cm { color: var(--muted); font-style: italic; }
+  .st { color: var(--green); }
+  .num { color: var(--orange); }
+  .op { color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.92em; }
+  th { background: var(--bg3); color: var(--accent); text-align: left; padding: 10px 14px; border: 1px solid var(--border); }
+  td { padding: 9px 14px; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg2); }
+  .box { border-radius: 10px; padding: 20px 24px; margin: 20px 0; border-left: 4px solid; }
+  .box.blue { background: #0d2137; border-color: var(--accent); }
+  .box.yellow { background: #2b1d0e; border-color: var(--yellow); }
+  .box.green { background: #0d2b0d; border-color: var(--green); }
+  .box.red { background: #2d0f0f; border-color: var(--red); }
+  .box.purple { background: #1a0d2b; border-color: var(--purple); }
+  .box .tag { font-weight: 700; font-size: 0.78em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; display: block; }
+  .box.blue .tag { color: var(--accent); }
+  .box.yellow .tag { color: var(--yellow); }
+  .box.green .tag { color: var(--green); }
+  .box.red .tag { color: var(--red); }
+  .box.purple .tag { color: var(--purple); }
+  ul, ol { padding-left: 24px; margin-bottom: 14px; }
+  li { margin: 5px 0; }
+  .toc { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 24px 28px; margin-bottom: 40px; }
+  .toc h3 { color: var(--accent); margin-top: 0; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin: 7px 0; }
+  .toc a { color: var(--muted); }
+  .toc a:hover { color: var(--accent); }
+  .analogy { background: var(--bg2); border: 1px dashed var(--purple); border-radius: 8px; padding: 16px 20px; margin: 16px 0; }
+  .analogy::before { content: "Real-world analogy: "; font-weight: 700; color: var(--purple); }
+  .diagram { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; font-family: monospace; font-size: 0.9em; color: var(--teal); white-space: pre; overflow-x: auto; margin: 16px 0; line-height: 1.5; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 18px; }
+  .card h4 { color: var(--teal); margin-top: 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+  .file { color: var(--teal); font-family: monospace; font-size: 0.88em; }
+  .step-num { display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: #000; font-weight: 700; border-radius: 50%; width: 28px; height: 28px; font-size: 0.85em; margin-right: 8px; flex-shrink: 0; }
+  .flow-step { display: flex; align-items: flex-start; margin: 12px 0; }
+  .flow-step > div { flex: 1; }
+  .arrow { display: block; text-align: center; color: var(--accent); font-size: 1.5em; margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>HIDA Explained</h1>
+<p class="subtitle">A beginner-friendly guide to understanding the HIDA Hierarchical Dataflow Compiler for High-Level Synthesis. Assumes minimal knowledge of LLVM, MLIR, and hardware.</p>
+
+<div class="toc">
+  <h3>Table of Contents</h3>
+  <ol>
+    <li><a href="#bigpicture">The Big Picture: What is HIDA and Why Does It Exist?</a></li>
+    <li><a href="#hardware">Hardware Background: What is an FPGA?</a></li>
+    <li><a href="#hls">HLS Background: What is High-Level Synthesis?</a></li>
+    <li><a href="#mlir">MLIR Background: The Compiler Infrastructure</a></li>
+    <li><a href="#architecture">HIDA Architecture Overview</a></li>
+    <li><a href="#types">The HLS Dialect: Types, Attributes, and Operations</a></li>
+    <li><a href="#twolevel">The Two-Level Dataflow IR</a></li>
+    <li><a href="#pipeline">The Full Compilation Pipeline (14 Stages)</a></li>
+    <li><a href="#passes">Key Passes Explained in Detail</a></li>
+    <li><a href="#codegen">Code Generation: From MLIR to C++</a></li>
+    <li><a href="#endtoend">End-to-End Example: ResNet18</a></li>
+    <li><a href="#codebase">Codebase Map: Where Everything Lives</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="bigpicture">1. The Big Picture: What is HIDA and Why Does It Exist?</h2>
+
+<p>Imagine you've trained a neural network (like ResNet or GPT) in PyTorch. Normally, you'd run it on a GPU. But what if you want to run it on a <strong>custom chip (FPGA)</strong> that can be far more power-efficient? The problem is: FPGAs don't understand Python or PyTorch. They need a hardware design specified at a very low level.</p>
+
+<p><strong>HIDA</strong> (Hierarchical Dataflow Architecture) is a compiler that bridges this gap. It takes your PyTorch model and automatically produces optimized C++ code that a downstream tool (AMD Vitis HLS) can turn into actual FPGA hardware.</p>
+
+<div class="diagram">  PyTorch Model (Python)
+       |
+       v
+  Torch-MLIR (translates to MLIR)
+       |
+       v
+  +--------------------------+
+  |   HIDA Compiler          |
+  |   (this codebase)        |
+  |                          |
+  |   14 optimization stages |
+  |   ~ 55 compiler passes   |
+  +--------------------------+
+       |
+       v
+  Optimized HLS C++ Code
+  (with #pragma directives)
+       |
+       v
+  AMD Vitis HLS
+  (translates to hardware)
+       |
+       v
+  FPGA Bitstream (.xclbin)
+  (runs on physical chip)</div>
+
+<div class="box green">
+  <span class="tag">Why this matters</span>
+  Without HIDA, a human engineer would need to manually write thousands of lines of pragma-annotated C++ code, manually decide how to tile loops, partition arrays, pipeline computations, and organize data flow. HIDA automates all of this, achieving up to <strong>3825x speedup</strong> over unoptimized baseline designs.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="hardware">2. Hardware Background: What is an FPGA?</h2>
+
+<div class="analogy">A GPU is like a factory with thousands of identical workers on a fixed assembly line. An FPGA is like a pile of LEGO bricks — you design your own custom factory, with custom assembly lines, custom conveyor belts, and custom storage bins, all tailored to exactly the computation you need.</div>
+
+<h3>2.1 What's Inside an FPGA</h3>
+<div class="grid">
+  <div class="card">
+    <h4>LUTs (Look-Up Tables)</h4>
+    <p>The basic building blocks. A LUT is a small truth table that can implement any simple logic function. Think of them as the "neurons" of the FPGA — individually simple, but powerful in combination. Modern FPGAs have millions of them.</p>
+  </div>
+  <div class="card">
+    <h4>DSPs (Digital Signal Processors)</h4>
+    <p>Specialized multiply-accumulate units hardwired into the FPGA. A single DSP can do one multiplication per clock cycle. Neural network inference (which is mostly matrix multiplies) consumes lots of DSPs. The AMD Alveo U55C has ~9,024 DSPs.</p>
+  </div>
+  <div class="card">
+    <h4>BRAM (Block RAM)</h4>
+    <p>Small, fast on-chip memory blocks (18 Kbit or 36 Kbit each). Data stored in BRAM can be accessed in 1-2 clock cycles. HIDA uses BRAM for intermediate computation buffers between dataflow tasks. Total: ~5 MB on a large FPGA.</p>
+  </div>
+  <div class="card">
+    <h4>URAM (Ultra RAM)</h4>
+    <p>Larger on-chip memory blocks (288 Kbit each). Slightly slower than BRAM but much denser. Used when BRAM runs out. Total: ~30 MB on a large FPGA.</p>
+  </div>
+  <div class="card">
+    <h4>HBM / DDR (External Memory)</h4>
+    <p>Off-chip memory (gigabytes). Much higher capacity but much higher latency (~100ns vs ~1ns for BRAM). The AMD Alveo U55C has 16 GB of HBM with 32 channels providing ~460 GB/s bandwidth. Weights and large activations live here.</p>
+  </div>
+  <div class="card">
+    <h4>Routing Fabric</h4>
+    <p>Programmable wires connecting everything. The routing is what makes an FPGA "programmable" — after you design your circuit, the FPGA's wires are configured to connect your LUTs, DSPs, and BRAMs the way you need.</p>
+  </div>
+</div>
+
+<h3>2.2 Key Concepts</h3>
+
+<h4>Clock Frequency</h4>
+<p>FPGAs typically run at 100-300 MHz (compared to GPUs at 1-2 GHz). They compensate by doing many things <em>simultaneously in parallel</em> — custom data paths, many operations per cycle.</p>
+
+<h4>Parallelism on FPGAs</h4>
+<p>Unlike a CPU (which executes instructions one-by-one) or a GPU (which has fixed parallel cores), an FPGA lets you create <em>exactly the parallelism your algorithm needs</em>. For a matrix multiply, you could create 64 multipliers working simultaneously, connected by custom data paths.</p>
+
+<!-- ============================================================ -->
+<h2 id="hls">3. HLS Background: What is High-Level Synthesis?</h2>
+
+<p>Traditionally, you design FPGA hardware using <strong>RTL (Register-Transfer Level)</strong> languages like Verilog or VHDL. This is extremely tedious — you're specifying individual wires, registers, and clock cycles.</p>
+
+<p><strong>High-Level Synthesis (HLS)</strong> lets you write in C++ instead. A tool like AMD Vitis HLS reads your C++ and automatically generates the RTL hardware design. But the catch is: the C++ must be annotated with special <code>#pragma</code> directives that tell the HLS tool <em>how</em> to build the hardware.</p>
+
+<h3>3.1 The Pragmas That Matter</h3>
+
+<h4>#pragma HLS PIPELINE II=N</h4>
+<p>Tells the tool to <strong>pipeline</strong> a loop — overlap successive iterations so a new iteration starts every N clock cycles. <code>II=1</code> is the best: one new input per cycle.</p>
+<pre><code><span class="cm">// Without pipelining: each iteration takes 5 cycles, total = 5 * 100 = 500 cycles</span>
+<span class="cm">// With PIPELINE II=1: first result at cycle 5, then one per cycle. Total ≈ 104 cycles</span>
+<span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i < <span class="num">100</span>; i++) {
+  <span class="cm">#pragma HLS PIPELINE II=1</span>
+  output[i] = a[i] * b[i] + c[i];
+}</code></pre>
+
+<div class="analogy">Pipelining is like a car wash. Without it, you wash one car completely before starting the next. With pipelining, car 2 enters the soap stage while car 1 is in the rinse stage — multiple cars are being processed simultaneously at different stages.</div>
+
+<h4>#pragma HLS DATAFLOW</h4>
+<p>Tells the tool to run sub-functions <strong>in parallel</strong> like an assembly line. Instead of finishing function A, then starting function B, both run at the same time — A produces data that B consumes as it becomes available.</p>
+<pre><code><span class="kw">void</span> top(<span class="kw">float</span>* in, <span class="kw">float</span>* out) {
+  <span class="cm">#pragma HLS DATAFLOW</span>
+  <span class="kw">float</span> mid1[<span class="num">64</span>], mid2[<span class="num">64</span>];
+  stage_A(in, mid1);    <span class="cm">// These three run</span>
+  stage_B(mid1, mid2);  <span class="cm">// in parallel like</span>
+  stage_C(mid2, out);   <span class="cm">// an assembly line</span>
+}</code></pre>
+
+<div class="analogy">Dataflow is like a factory assembly line. Station A bends metal, station B paints it, station C packages it. All three stations work simultaneously on different items. The "items" flowing between stations are stored in small buffers (the mid1, mid2 arrays).</div>
+
+<h4>#pragma HLS ARRAY_PARTITION</h4>
+<p>Splits an array across multiple physical BRAM banks so multiple elements can be read/written simultaneously. Without this, BRAM can only serve 1-2 accesses per cycle (it's like a library with only 2 checkout counters).</p>
+<pre><code><span class="kw">float</span> buf[<span class="num">64</span>];
+<span class="cm">#pragma HLS ARRAY_PARTITION variable=buf cyclic factor=8 dim=1</span>
+<span class="cm">// Now buf is split into 8 banks: buf[0],buf[8],buf[16],... in bank 0</span>
+<span class="cm">//                                buf[1],buf[9],buf[17],... in bank 1</span>
+<span class="cm">// etc. Up to 8 parallel accesses per cycle.</span></code></pre>
+
+<h4>#pragma HLS STREAM</h4>
+<p>Declares a variable as a FIFO (First-In-First-Out) queue instead of regular memory. Used for dataflow communication.</p>
+<pre><code>hls::stream&lt;<span class="kw">float</span>&gt; fifo;
+<span class="cm">#pragma HLS STREAM variable=fifo depth=4</span>
+<span class="cm">// fifo can hold 4 elements. Writer blocks if full, reader blocks if empty.</span></code></pre>
+
+<h4>#pragma HLS INTERFACE</h4>
+<p>Specifies how the kernel connects to the outside world (DDR/HBM memory, control bus).</p>
+<pre><code><span class="kw">void</span> kernel(<span class="kw">float</span>* weights, <span class="kw">int</span> n) {
+  <span class="cm">#pragma HLS INTERFACE m_axi port=weights  // AXI master (reads from DDR)</span>
+  <span class="cm">#pragma HLS INTERFACE s_axilite port=n     // AXI-Lite slave (control reg)</span>
+  <span class="cm">#pragma HLS INTERFACE s_axilite port=return // for start/done signals</span>
+}</code></pre>
+
+<div class="box yellow">
+  <span class="tag">The Core Challenge HIDA Solves</span>
+  Getting these pragmas right is an art. The wrong tiling size, the wrong partition factor, the wrong pipeline target — any of these can make the design 10-100x slower than optimal, or fail to meet resource constraints entirely. HIDA's job is to automatically find good pragma configurations.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="mlir">4. MLIR Background: The Compiler Infrastructure</h2>
+
+<p>HIDA is built on <strong>MLIR</strong> (Multi-Level Intermediate Representation), a compiler framework from the LLVM project. To understand HIDA, you need to understand a few MLIR concepts.</p>
+
+<h3>4.1 What is MLIR?</h3>
+<p>MLIR is a system for building compilers. It gives you tools to define your own <strong>intermediate representations</strong> (IRs) — the internal languages that a compiler works with between the input (e.g., PyTorch) and the output (e.g., C++ code).</p>
+
+<div class="analogy">If a compiler is a translation bureau, MLIR is the bureau's framework for creating specialized translators. Instead of translating French directly to Japanese (very hard), you go French → English → simplified English → Japanese. Each intermediate language is designed to make certain transformations easy.</div>
+
+<h3>4.2 The Core Concepts</h3>
+
+<h4>Operations (Ops)</h4>
+<p>Everything in MLIR is an <strong>Operation</strong>. An op takes inputs, produces outputs, and may contain nested code. Think of it as a very flexible instruction.</p>
+<pre><code><span class="cm">// A simple add: takes %a and %b, produces %result</span>
+%result = <span class="op">arith.addi</span> %a, %b : <span class="ty">i32</span>
+
+<span class="cm">// A loop: takes nothing, but contains a body (region)</span>
+<span class="op">affine.for</span> %i = <span class="num">0</span> to <span class="num">64</span> step <span class="num">1</span> {
+  <span class="cm">// body operations here</span>
+}
+
+<span class="cm">// A function: has a name attribute and a body region</span>
+<span class="op">func.func</span> @forward(%input: <span class="ty">tensor&lt;64x64xf32&gt;</span>) -> <span class="ty">tensor&lt;1000xf32&gt;</span> {
+  <span class="cm">// body</span>
+}</code></pre>
+
+<p>Every op has four parts:</p>
+<ul>
+  <li><strong>Operands</strong> — input values (<code>%a</code>, <code>%b</code>)</li>
+  <li><strong>Results</strong> — output values (<code>%result</code>)</li>
+  <li><strong>Attributes</strong> — compile-time constants (like the <code>64</code> in the loop bound)</li>
+  <li><strong>Regions</strong> — nested code blocks (the <code>{ ... }</code> body of a loop or function)</li>
+</ul>
+
+<h4>SSA (Static Single Assignment)</h4>
+<p>In MLIR, every value is defined exactly once. You never "reassign" a variable — you always create a new one. This makes it easy for the compiler to track where data flows.</p>
+<pre><code><span class="cm">// NOT allowed in SSA:</span>
+<span class="cm">// %x = 5</span>
+<span class="cm">// %x = %x + 1   (reassignment!)</span>
+
+<span class="cm">// SSA version:</span>
+%x0 = <span class="op">arith.constant</span> <span class="num">5</span> : <span class="ty">i32</span>
+%x1 = <span class="op">arith.addi</span> %x0, %one : <span class="ty">i32</span>    <span class="cm">// new value, new name</span></code></pre>
+
+<h4>Types</h4>
+<p>Every value has a type. MLIR has built-in types and lets dialects define custom types.</p>
+<pre><code><span class="ty">i32</span>                        <span class="cm">// 32-bit integer</span>
+<span class="ty">f32</span>                        <span class="cm">// 32-bit float</span>
+<span class="ty">index</span>                      <span class="cm">// loop index type</span>
+<span class="ty">tensor&lt;64x64xf32&gt;</span>          <span class="cm">// immutable 64x64 float tensor</span>
+<span class="ty">memref&lt;64x64xf32&gt;</span>          <span class="cm">// mutable 64x64 float buffer (pointer-like)</span>
+<span class="ty">hls.stream&lt;f32, 4&gt;</span>         <span class="cm">// HIDA's custom FIFO type (depth=4)</span></code></pre>
+
+<h4>Dialects</h4>
+<p>A <strong>dialect</strong> is a collection of related ops, types, and attributes under a namespace. Different dialects represent different levels of abstraction:</p>
+<table>
+  <tr><th>Dialect</th><th>Abstraction Level</th><th>Example</th></tr>
+  <tr><td><code>torch</code></td><td>PyTorch ops</td><td><code>torch.aten.linear</code></td></tr>
+  <tr><td><code>tosa</code></td><td>Tensor operations</td><td><code>tosa.conv2d</code>, <code>tosa.matmul</code></td></tr>
+  <tr><td><code>linalg</code></td><td>Linear algebra on tensors</td><td><code>linalg.conv_2d_nchw_fchw</code></td></tr>
+  <tr><td><code>affine</code></td><td>Loop nests with affine bounds</td><td><code>affine.for</code>, <code>affine.load</code></td></tr>
+  <tr><td><code>memref</code></td><td>Memory operations</td><td><code>memref.alloc</code>, <code>memref.load</code></td></tr>
+  <tr><td><code>arith</code></td><td>Arithmetic</td><td><code>arith.addi</code>, <code>arith.mulf</code></td></tr>
+  <tr><td><code>hls</code></td><td>HIDA's custom HLS ops</td><td><code>hls.dataflow.dispatch</code>, <code>hls.dataflow.node</code></td></tr>
+</table>
+<p>Compilation works by <strong>progressively lowering</strong> from high-level to low-level dialects. torch → tosa → linalg → affine + hls → C++ output.</p>
+
+<h4>Passes</h4>
+<p>A <strong>pass</strong> is a transformation that reads the IR, analyzes it, and rewrites it. For example, a "loop tiling" pass takes large loops and breaks them into smaller tiled loops. HIDA has ~55 passes organized into a pipeline.</p>
+
+<h4>Tensor vs. Memref</h4>
+<p>This distinction is critical and trips up many newcomers:</p>
+<div class="grid">
+  <div class="card">
+    <h4>tensor (value semantics)</h4>
+    <p><code>tensor&lt;64x64xf32&gt;</code> is an <strong>immutable mathematical object</strong> — like a matrix in math class. When you "modify" a tensor, you actually create a brand new tensor. Tensors have no physical address in memory.</p>
+    <p><strong>Used in:</strong> Early pipeline stages (linalg ops, fusion analysis). Easier to reason about because there are no side effects.</p>
+  </div>
+  <div class="card">
+    <h4>memref (pointer semantics)</h4>
+    <p><code>memref&lt;64x64xf32&gt;</code> is a <strong>typed pointer to a memory buffer</strong>. You can read and write to specific addresses. A memref maps to a real array in the generated C++ code.</p>
+    <p><strong>Used in:</strong> Later pipeline stages (affine loops, hardware generation). Required because actual hardware has physical memory.</p>
+  </div>
+</div>
+<p>HIDA's pipeline starts with tensors and converts to memrefs in stage 3 (the "bufferization" pass). After that point, everything is memref-based.</p>
+
+<!-- ============================================================ -->
+<h2 id="architecture">5. HIDA Architecture Overview</h2>
+
+<p>HIDA is organized as a standard MLIR project. Here's the high-level structure:</p>
+
+<div class="diagram">HIDA-Fork/
+ |-- include/scalehls/
+ |    |-- Dialect/HLS/         <span class="cm"># Type, op, attribute DEFINITIONS (TableGen .td files)</span>
+ |    |    |-- HLSTypes.td     <span class="cm"># StreamType, AxiType, BundleType</span>
+ |    |    |-- HLSOps.td       <span class="cm"># 21 operations (Dispatch, Task, Node, Stream, ...)</span>
+ |    |    |-- HLSAttributes.td<span class="cm"># MemoryKind, LoopDirective, Timing, Resource, ...</span>
+ |    |    |-- HLSInterfaces.td<span class="cm"># BufferLikeInterface, StageLikeInterface</span>
+ |    |    +-- Visitor.h       <span class="cm"># Visitor pattern for traversing ops</span>
+ |    +-- Transforms/
+ |         |-- Passes.td       <span class="cm"># All pass DEFINITIONS</span>
+ |         +-- Passes.h        <span class="cm"># Factory functions to create passes</span>
+ |
+ |-- lib/
+ |    |-- Dialect/HLS/
+ |    |    |-- HLS.cpp         <span class="cm"># Verifiers, canonicalizers, type implementations</span>
+ |    |    |-- Utils.cpp       <span class="cm"># Utility functions (graph analysis, fusion helpers)</span>
+ |    |    +-- Analysis.cpp    <span class="cm"># ComplexityAnalysis, CorrelationAnalysis</span>
+ |    |-- Transforms/
+ |    |    |-- Passes.cpp      <span class="cm"># PIPELINE REGISTRATION (this is the "main" file)</span>
+ |    |    |-- Dataflow/       <span class="cm"># 15 dataflow passes (the core of HIDA)</span>
+ |    |    |-- Loop/           <span class="cm"># 7 loop optimization passes</span>
+ |    |    |-- Memory/         <span class="cm"># 10 memory optimization passes</span>
+ |    |    |-- Directive/      <span class="cm"># 7 HLS directive generation passes</span>
+ |    |    +-- Tensor/         <span class="cm"># 5 tensor-level passes</span>
+ |    +-- Translation/
+ |         +-- EmitHLSCpp.cpp  <span class="cm"># THE CODE GENERATOR (MLIR -> C++ text output)</span>
+ |
+ |-- tools/
+ |    |-- scalehls-opt/        <span class="cm"># Command-line pass runner</span>
+ |    +-- scalehls-translate/  <span class="cm"># Command-line code emitter</span>
+ |
+ |-- samples/pytorch/          <span class="cm"># ResNet18, MobileNet, VGG16, YOLO, ZFNet examples</span>
+ +-- test/                     <span class="cm"># 42 MLIR regression tests</span></div>
+
+<div class="box blue">
+  <span class="tag">How to Use HIDA (Two Commands)</span>
+  <pre><code><span class="cm"># Step 1: Optimize MLIR with the HIDA pipeline</span>
+scalehls-opt resnet18.mlir \
+  -hida-pytorch-pipeline="top-func=forward loop-tile-size=8 loop-unroll-factor=4"
+
+<span class="cm"># Step 2: Emit optimized C++ code</span>
+  | scalehls-translate -scalehls-emit-hlscpp -emit-vitis-directives > resnet18.cpp</code></pre>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="types">6. The HLS Dialect: Types, Attributes, and Operations</h2>
+
+<p>HIDA extends MLIR with a custom <code>hls</code> dialect. This is the language that HIDA uses to describe hardware concepts.</p>
+
+<h3>6.1 Custom Types (3 types)</h3>
+<table>
+  <tr><th>Type</th><th>Syntax</th><th>What It Represents</th></tr>
+  <tr><td><strong>StreamType</strong></td><td><code>hls.stream&lt;f32, 4&gt;</code></td><td>A FIFO channel that holds <code>f32</code> elements, depth 4. Maps to <code>hls::stream&lt;float&gt;</code> in C++.</td></tr>
+  <tr><td><strong>AxiType</strong></td><td><code>hls.axi&lt;memref&lt;64xf32&gt;&gt;</code></td><td>An AXI bus interface wrapping a memref. Used to declare external memory ports.</td></tr>
+  <tr><td><strong>BundleType</strong></td><td><code>hls.bundle&lt;memref&lt;64xf32&gt;, mm&gt;</code></td><td>Groups multiple AXI ports together. The <code>mm</code> means memory-mapped (vs <code>lite</code> or <code>stream</code>).</td></tr>
+</table>
+
+<h3>6.2 Attributes (11 attributes)</h3>
+
+<h4>Memory Hierarchy</h4>
+<table>
+  <tr><th>Attribute</th><th>Purpose</th></tr>
+  <tr><td><code>MemoryKind</code></td><td>Classifies where a buffer lives: <code>dram</code>, <code>bram_t2p</code> (true dual-port), <code>bram_s2p</code> (simple dual-port), <code>uram_2p</code>, <code>lutram_2p</code>, etc. HIDA assigns this automatically based on buffer size.</td></tr>
+  <tr><td><code>PartitionLayoutAttr</code></td><td>Describes how an array is partitioned across BRAM banks. Modes: <code>cyclic</code> (round-robin), <code>block</code> (contiguous chunks), <code>complete</code> (every element in its own bank).</td></tr>
+  <tr><td><code>TileLayoutAttr</code></td><td>Describes tile shape and vectorization factor for a buffer. Example: <code>hls.tile&lt;[16,16], [1,2]&gt;</code> means 16x16 tiles with vector width 2 on the last dim.</td></tr>
+</table>
+
+<h4>HLS Directives</h4>
+<table>
+  <tr><th>Attribute</th><th>Purpose</th></tr>
+  <tr><td><code>LoopDirectiveAttr</code></td><td>Attached to loops: <code>{pipeline=true, targetII=1, dataflow=false, flatten=false}</code></td></tr>
+  <tr><td><code>FuncDirectiveAttr</code></td><td>Attached to functions: <code>{pipeline=false, targetInterval=1, dataflow=true}</code></td></tr>
+</table>
+
+<h4>Performance Estimation</h4>
+<table>
+  <tr><th>Attribute</th><th>Purpose</th></tr>
+  <tr><td><code>TimingAttr</code></td><td><code>hls.time&lt;0 -&gt; 100, latency=100, interval=10&gt;</code> — scheduling info for QoR estimation</td></tr>
+  <tr><td><code>ResourceAttr</code></td><td><code>hls.res&lt;lut=500, dsp=8, bram=4&gt;</code> — resource usage estimate</td></tr>
+  <tr><td><code>LoopInfoAttr</code></td><td><code>hls.info&lt;flatten_trip_count=64, iter_latency=5, min_ii=1&gt;</code> — loop analysis results</td></tr>
+</table>
+
+<h3>6.3 Operations (21 operations in 5 categories)</h3>
+
+<p>The operations are organized in two levels:</p>
+
+<div class="diagram"><span class="cm">HIGH-LEVEL (Functional Dataflow)</span>      <span class="cm">LOW-LEVEL (Structural Dataflow)</span>
+Used during optimization/fusion.        Used during hardware mapping.
+Transparent regions (can see outside).  Isolated regions (self-contained).
+
+  DispatchOp                              ScheduleOp
+    |-- TaskOp                              |-- BufferOp / StreamOp
+    |     |-- TaskOp (nested)               |-- NodeOp
+    |     +-- YieldOp                       |     |-- (computation)
+    +-- YieldOp                             +-- NodeOp
+                                                  +-- (computation)
+
+  [LowerDataflow pass converts left --> right]</div>
+
+<p>The key operations, grouped by what they do:</p>
+
+<table>
+  <tr><th>Op</th><th>Level</th><th>What It Does</th></tr>
+  <tr><td><code>hls.dataflow.dispatch</code></td><td>High</td><td>Container for a graph of tasks. Like a "work package" to be parallelized.</td></tr>
+  <tr><td><code>hls.dataflow.task</code></td><td>High</td><td>A unit of computation that can be fused or split. Contains ops to execute.</td></tr>
+  <tr><td><code>hls.dataflow.yield</code></td><td>High</td><td>Returns results from a dispatch or task (like <code>return</code> for functions).</td></tr>
+  <tr><td><code>hls.dataflow.schedule</code></td><td>Low</td><td>Container for scheduled nodes. Has explicit I/O. Marked "legal" when all violations fixed.</td></tr>
+  <tr><td><code>hls.dataflow.node</code></td><td>Low</td><td>Computation node with classified I/O: <strong>inputs</strong> (read-only), <strong>outputs</strong> (written), <strong>params</strong> (scalars). Each node becomes a C++ sub-function.</td></tr>
+  <tr><td><code>hls.dataflow.buffer</code></td><td>Low</td><td>On-chip memory buffer between nodes. Has depth (for ping-pong buffering) and optional init value.</td></tr>
+  <tr><td><code>hls.dataflow.stream</code></td><td>Low</td><td>FIFO channel for scalar communication between nodes.</td></tr>
+  <tr><td><code>hls.dataflow.stream_read</code></td><td>Low</td><td>Pop a value from a stream.</td></tr>
+  <tr><td><code>hls.dataflow.stream_write</code></td><td>Low</td><td>Push a value to a stream.</td></tr>
+  <tr><td><code>hls.dataflow.to_stream</code></td><td>High</td><td>Convert a scalar value to a stream (for inter-task scalar communication).</td></tr>
+  <tr><td><code>hls.dataflow.to_value</code></td><td>High</td><td>Convert a stream back to a scalar value.</td></tr>
+  <tr><td><code>hls.axi.bundle</code></td><td>Interface</td><td>Declares an AXI bundle (group of ports sharing a bus).</td></tr>
+  <tr><td><code>hls.axi.port</code></td><td>Interface</td><td>Declares a single AXI port in a bundle.</td></tr>
+  <tr><td><code>hls.axi.pack</code></td><td>Interface</td><td>Packs a memref into an AXI interface type.</td></tr>
+  <tr><td><code>hls.buffer_vectorize</code></td><td>Memory</td><td>Converts a scalar buffer to a vector buffer (for wider memory access).</td></tr>
+  <tr><td><code>hls.buffer_devectorize</code></td><td>Memory</td><td>Reverses vectorization.</td></tr>
+  <tr><td><code>hls.prim.mul</code></td><td>Compute</td><td>Specialized 8-bit multiply for DSP binding (maps to Xilinx DSP48).</td></tr>
+  <tr><td><code>hls.prim.cast</code></td><td>Compute</td><td>Integer type cast (8/16/32 bit).</td></tr>
+  <tr><td><code>hls.affine.select</code></td><td>Control</td><td>Affine-constraint-based conditional select (ternary).</td></tr>
+  <tr><td><code>hls.vector.init</code></td><td>Memory</td><td>Initialize a vector value.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="twolevel">7. The Two-Level Dataflow IR</h2>
+
+<p>This is HIDA's central design idea and the key to understanding the whole system.</p>
+
+<h3>7.1 Why Two Levels?</h3>
+<p>Building a hardware dataflow pipeline requires answering two very different kinds of questions:</p>
+<ol>
+  <li><strong>What should run in parallel?</strong> (algorithm-level question) — which computations can overlap?</li>
+  <li><strong>How should the hardware be wired?</strong> (microarchitecture-level question) — what buffers, what sizes, what connections?</li>
+</ol>
+<p>Answering both at the same time is too complex. So HIDA uses two IRs:</p>
+
+<div class="grid">
+  <div class="card">
+    <h4>Functional Dataflow (High Level)</h4>
+    <p>Answers: "What should run in parallel?"</p>
+    <ul>
+      <li><strong>DispatchOp</strong> — a block of work to parallelize</li>
+      <li><strong>TaskOp</strong> — a unit of computation</li>
+      <li>Tasks have <strong>transparent</strong> regions — they can see variables from outside</li>
+      <li>Tasks are easy to <strong>fuse</strong> (merge two tasks into one) or <strong>split</strong> (break one task into two)</li>
+    </ul>
+    <p>At this level, HIDA figures out the <em>grouping</em> of computations.</p>
+  </div>
+  <div class="card">
+    <h4>Structural Dataflow (Low Level)</h4>
+    <p>Answers: "How should the hardware be wired?"</p>
+    <ul>
+      <li><strong>ScheduleOp</strong> — contains a scheduled graph of nodes</li>
+      <li><strong>NodeOp</strong> — has explicit input/output ports</li>
+      <li><strong>BufferOp</strong> — on-chip BRAM between nodes</li>
+      <li><strong>StreamOp</strong> — FIFO channel for scalars</li>
+      <li>Nodes have <strong>isolated</strong> regions — they are self-contained</li>
+    </ul>
+    <p>At this level, HIDA assigns <em>physical resources</em> (buffers, streams, memory types).</p>
+  </div>
+</div>
+
+<p>The <code>LowerDataflow</code> pass converts from functional to structural:</p>
+<pre><code><span class="cm">// BEFORE (Functional): Tasks share variables implicitly</span>
+<span class="op">hls.dataflow.dispatch</span> {
+  %buf = <span class="op">hls.dataflow.buffer</span> : <span class="ty">memref&lt;16x16xf32&gt;</span>
+  <span class="op">hls.dataflow.task</span> {
+    <span class="cm">// can see %buf because regions are transparent</span>
+    <span class="op">affine.store</span> %val, %buf[%i, %j] : <span class="ty">memref&lt;16x16xf32&gt;</span>
+  }
+  <span class="op">hls.dataflow.task</span> {
+    %v = <span class="op">affine.load</span> %buf[%i, %j] : <span class="ty">memref&lt;16x16xf32&gt;</span>
+  }
+}
+
+<span class="cm">// AFTER (Structural): Nodes have explicit I/O ports</span>
+<span class="op">hls.dataflow.schedule</span> {
+  %buf = <span class="op">hls.dataflow.buffer</span> : <span class="ty">memref&lt;16x16xf32&gt;</span>
+  <span class="op">hls.dataflow.node</span>(%buf) -> (%buf) {
+  <span class="cm">// ^--- inputs       ^--- outputs  (explicit ports)</span>
+    ^bb0(%out: <span class="ty">memref&lt;16x16xf32&gt;</span>):
+      <span class="op">affine.store</span> %val, %out[%i, %j]
+  }
+  <span class="op">hls.dataflow.node</span>(%buf) -> () {
+    ^bb0(%in: <span class="ty">memref&lt;16x16xf32&gt;</span>):
+      %v = <span class="op">affine.load</span> %in[%i, %j]
+  }
+}</code></pre>
+
+<h3>7.2 The Legality Problem</h3>
+<p>A structural dataflow schedule must satisfy two rules before it can become valid hardware:</p>
+<ol>
+  <li><strong>Single Producer</strong> — each buffer must be written by exactly one node</li>
+  <li><strong>Single Consumer</strong> — each buffer must be read by exactly one node (or use fork nodes)</li>
+</ol>
+<p>HIDA has dedicated passes to fix violations: <code>EliminateMultiProducer</code> and <code>EliminateMultiConsumer</code>. Once all violations are fixed, the schedule is marked <code>legal</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="pipeline">8. The Full Compilation Pipeline (14 Stages)</h2>
+
+<p>The main pipeline is registered as <code>hida-pytorch-pipeline</code>. Here's every stage, what it does, and why.</p>
+
+<div class="box purple">
+  <span class="tag">Reading Tip</span>
+  Each stage has a "debug point" number (1-13). You can stop the pipeline at any stage using <code>-hida-pytorch-pipeline="debug-point=5"</code> to see the IR after stage 5.
+</div>
+
+<!-- Stage 0 -->
+<h3>Stage 0: TOSA Optimization</h3>
+<p><strong>Input:</strong> TOSA dialect ops from Torch-MLIR. <strong>Output:</strong> Optimized TOSA ops converted to Linalg.</p>
+<p>Torch-MLIR translates PyTorch ops to TOSA (Tensor Operator Set Architecture) — a standardized set of tensor operations. HIDA first simplifies the TOSA graph (removing redundant transposes), then converts everything to the <code>linalg</code> dialect, which is better for analysis.</p>
+<p><strong>Key pass:</strong> <code>TosaSimplifyGraph</code> — removes redundant transpose/reshape ops that Torch-MLIR inserts.</p>
+
+<!-- Stage 1 -->
+<h3>Stage 1: Fake Quantization (Optional)</h3>
+<p><strong>Input:</strong> Linalg ops with float types. <strong>Output:</strong> Linalg ops with integer types (e.g., i8).</p>
+<p>Converts floating-point operations to fixed-point integer operations. This is critical for FPGA efficiency — an 8-bit multiply uses far fewer DSPs than a 32-bit float multiply. The "fake" part means it quantizes the IR but doesn't train with quantization-aware training.</p>
+
+<!-- Stage 2 -->
+<h3>Stage 2: Linalg Optimization &amp; Task Extraction</h3>
+<p><strong>Input:</strong> Linalg ops. <strong>Output:</strong> DispatchOp containing TaskOps.</p>
+<p>This is where HIDA first identifies the dataflow structure. The key pass, <code>CreateDataflowFromLinalg</code>, does pattern matching:</p>
+<ul>
+  <li>Convolution and matrix multiply ops become <strong>root tasks</strong></li>
+  <li>Elementwise ops (ReLU, add, etc.) are <strong>fused</strong> into neighboring tasks</li>
+  <li>Reshape/padding ops are <strong>fused</strong> into their consumers</li>
+</ul>
+<p>After this stage, the IR has a <code>DispatchOp</code> containing a graph of <code>TaskOp</code>s connected by tensor values.</p>
+
+<!-- Stage 3 -->
+<h3>Stage 3: Bufferization</h3>
+<p><strong>Input:</strong> Tensor-based IR. <strong>Output:</strong> Memref-based IR.</p>
+<p>Converts immutable tensors to mutable memory buffers. After this stage, there are no more <code>tensor</code> types — everything is <code>memref</code>. This is a one-way door: you can't go back to tensor semantics.</p>
+<p><strong>Key pass:</strong> <code>BufferizeDataflow</code> — handles HIDA-specific bufferization: converts task results to buffer allocations, creates <code>BufferOp</code> instances.</p>
+
+<!-- Stage 4 -->
+<h3>Stage 4: Linalg to Affine Conversion</h3>
+<p><strong>Input:</strong> Linalg generic ops. <strong>Output:</strong> Affine loop nests.</p>
+<p>Converts high-level linalg operations (like <code>linalg.generic</code>) into explicit loop nests using the <code>affine</code> dialect. A matrix multiply becomes a triple-nested loop.</p>
+<pre><code><span class="cm">// BEFORE: linalg.generic (implicit loops)</span>
+linalg.generic {
+  indexing_maps = [...], iterator_types = [<span class="st">"parallel"</span>, <span class="st">"parallel"</span>, <span class="st">"reduction"</span>]
+} ins(%A, %B) outs(%C) { ... }
+
+<span class="cm">// AFTER: explicit affine loops</span>
+<span class="op">affine.for</span> %i = <span class="num">0</span> to <span class="num">64</span> {
+  <span class="op">affine.for</span> %j = <span class="num">0</span> to <span class="num">64</span> {
+    <span class="op">affine.for</span> %k = <span class="num">0</span> to <span class="num">64</span> {
+      %a = <span class="op">affine.load</span> %A[%i, %k]
+      %b = <span class="op">affine.load</span> %B[%k, %j]
+      %c = <span class="op">affine.load</span> %C[%i, %j]
+      %prod = <span class="op">arith.mulf</span> %a, %b
+      %sum = <span class="op">arith.addf</span> %c, %prod
+      <span class="op">affine.store</span> %sum, %C[%i, %j]
+    }
+  }
+}</code></pre>
+
+<!-- Stage 5 -->
+<h3>Stage 5: Affine Loop Fusion</h3>
+<p><strong>Input:</strong> Many separate loop nests. <strong>Output:</strong> Fewer, fused loop nests.</p>
+<p>Merges producer-consumer loops into single loops when possible. This reduces memory traffic — instead of writing an intermediate array and reading it back, the fused loop passes data through registers.</p>
+
+<!-- Stage 6 -->
+<h3>Stage 6: Buffer Placement</h3>
+<p><strong>Input:</strong> Buffers with no memory type. <strong>Output:</strong> Buffers classified as BRAM or DRAM.</p>
+<p>Decides where each buffer lives in the memory hierarchy:</p>
+<ul>
+  <li>Small buffers (below <code>externalBufferThreshold</code>, default ~16KB) → <strong>BRAM</strong> (fast, on-chip)</li>
+  <li>Large buffers → <strong>DRAM</strong> (slow, off-chip, but large capacity)</li>
+</ul>
+<p>DRAM buffers are "hoisted" outside of tasks so they can be shared globally.</p>
+
+<!-- Stage 7 -->
+<h3>Stage 7: Loop Tiling</h3>
+<p><strong>Input:</strong> Large loops. <strong>Output:</strong> Tiled loops (two-level: outer tile loop + inner point loop).</p>
+<p>Breaks large loops into small tiles to fit data into on-chip BRAM. For example, a 64x64 matrix multiply with tile size 8 becomes four nested loops: the outer two iterate over 8 tiles, the inner two iterate within each 8x8 tile.</p>
+<pre><code><span class="cm">// BEFORE: one level</span>
+<span class="op">affine.for</span> %i = <span class="num">0</span> to <span class="num">64</span> { ... }
+
+<span class="cm">// AFTER: two levels (tile size = 8)</span>
+<span class="op">affine.for</span> %i_tile = <span class="num">0</span> to <span class="num">64</span> step <span class="num">8</span> {       <span class="cm">// outer: 8 tiles</span>
+  <span class="op">affine.for</span> %i_point = <span class="num">0</span> to <span class="num">8</span> {             <span class="cm">// inner: 8 elements per tile</span>
+    <span class="cm">// i = i_tile + i_point</span>
+  }
+}</code></pre>
+
+<div class="analogy">Loop tiling is like reading a textbook: instead of reading one word at a time from the whole book (cache misses!), you read one page completely (fits in cache), then move to the next page.</div>
+
+<!-- Stage 8 -->
+<h3>Stage 8: Local Buffer Allocation</h3>
+<p><strong>Input:</strong> Code accessing large DRAM arrays directly. <strong>Output:</strong> Code that copies DRAM data into small on-chip BRAM buffers before computing.</p>
+<p>Creates tile-sized local buffers (BRAM) and inserts copy operations to load data from DRAM into BRAM before computation. This is critical for performance — accessing BRAM is ~100x faster than accessing DRAM.</p>
+
+<!-- Stage 9 -->
+<h3>Stage 9: Affine Loop Dataflow</h3>
+<p><strong>Input:</strong> Affine loop nests. <strong>Output:</strong> DispatchOp/TaskOp hierarchy created from loop structure.</p>
+<p>This is the second dataflow extraction pass (the first was in Stage 2 at the linalg level). Now operating on affine loops, it wraps each tiled loop body in a <code>TaskOp</code> and the outer tile loop in a <code>DispatchOp</code>.</p>
+<p><strong>Also:</strong> <code>StreamDataflowTask</code> converts scalar task outputs (like reduction results) to stream channels for hardware communication.</p>
+
+<!-- Stage 10 -->
+<h3>Stage 10: Lower &amp; Fix Dataflow</h3>
+<p><strong>Input:</strong> Functional dataflow (Dispatch/Task). <strong>Output:</strong> Legal structural dataflow (Schedule/Node/Buffer).</p>
+<p>This is the big transition — three critical passes run:</p>
+<ol>
+  <li><code>LowerDataflow</code> — converts DispatchOp→ScheduleOp, TaskOp→NodeOp. Classifies each node's arguments as inputs (read-only) or outputs (written).</li>
+  <li><code>EliminateMultiProducer</code> — if two nodes write to the same buffer, creates separate buffers and copy nodes.</li>
+  <li><code>EliminateMultiConsumer</code> — if two nodes read from the same buffer, inserts a fork node that copies the data to separate buffers.</li>
+</ol>
+<p>After this: <code>ScheduleDataflowNode</code> assigns a <strong>level</strong> (topological order) to each node using ALAP (As Late As Possible) scheduling.</p>
+
+<!-- Stage 11 -->
+<h3>Stage 11: Parallelize Dataflow</h3>
+<p><strong>Input:</strong> Scheduled dataflow. <strong>Output:</strong> Parallelized dataflow (loops unrolled for hardware replication).</p>
+<p>This is where HIDA's "Hierarchical" part kicks in. <code>ParallelizeDataflowNode</code> decides how many copies of each node to create:</p>
+<ul>
+  <li><strong>Complexity-aware:</strong> Complex nodes (many ops) get higher unroll factors</li>
+  <li><strong>Correlation-aware:</strong> Nodes that share data are unrolled together to maintain alignment</li>
+</ul>
+<p>For example, if the unroll factor is 4, a node processing a 64-element array becomes 4 copies each processing 16 elements in parallel.</p>
+
+<!-- Stage 12 -->
+<h3>Stage 12: Memory Optimization</h3>
+<p><strong>Input:</strong> Parallelized dataflow. <strong>Output:</strong> Memory-optimized dataflow.</p>
+<ul>
+  <li><code>ReduceInitialInterval</code> — rebalances reduction trees to lower pipeline II</li>
+  <li><code>BufferVectorize</code> — converts scalar buffer accesses to vector accesses (load/store 4 elements at once instead of 1)</li>
+  <li><code>AffineStoreForward</code> — eliminates redundant loads by forwarding stored values</li>
+</ul>
+
+<!-- Stage 13 -->
+<h3>Stage 13: Convert to Functions</h3>
+<p><strong>Input:</strong> ScheduleOp/NodeOp hierarchy. <strong>Output:</strong> Plain functions with calls.</p>
+<p>Each <code>NodeOp</code> becomes a C++ function. Each <code>ScheduleOp</code> becomes a function body with <code>#pragma HLS DATAFLOW</code>. Buffer arguments become function parameters.</p>
+<p><strong>Also:</strong> <code>CreateTokenStream</code> adds stream-based synchronization tokens for DRAM access ordering.</p>
+
+<!-- Stage 14 -->
+<h3>Stage 14: Directive Generation</h3>
+<p><strong>Input:</strong> Functions with loops. <strong>Output:</strong> Functions annotated with HLS pragmas.</p>
+<ul>
+  <li><code>LoopPipelining</code> — marks innermost loops with <code>#pragma HLS PIPELINE II=1</code></li>
+  <li><code>ArrayPartition</code> — searches for optimal partition factors and applies them</li>
+  <li><code>CreateAxiInterface</code> — wraps the top function with AXI bus interfaces</li>
+  <li><code>CreateHLSPrimitive</code> — maps 8-bit multiplies to DSP-optimized primitives</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="passes">9. Key Passes Explained in Detail</h2>
+
+<h3>9.1 CreateDataflowFromLinalg</h3>
+<p><strong>File:</strong> <span class="file">lib/Transforms/Dataflow/CreateDataflowFromLinalg.cpp</span></p>
+<p>This pass identifies which operations form the "spine" of the dataflow graph. It uses pattern matching:</p>
+<ol>
+  <li><strong>Root ops:</strong> Convolutions (<code>linalg.conv_2d_nchw_fchw</code>) and matrix multiplies (<code>linalg.generic</code> with contraction indexing) become task roots.</li>
+  <li><strong>Forward fusion:</strong> Ops that <em>consume</em> a root's output (like <code>tensor.pad</code>, <code>tensor.empty</code>) are pulled into the root's task.</li>
+  <li><strong>Backward fusion:</strong> Ops that <em>produce</em> a root's input (like elementwise activation functions) are pulled into the root's task.</li>
+</ol>
+<p>The result: a clean graph where each task is a "layer" of the neural network (conv + ReLU, matmul + bias, etc.).</p>
+
+<h3>9.2 ParallelizeDataflowNode (Intensity-Aware)</h3>
+<p><strong>File:</strong> <span class="file">lib/Transforms/Dataflow/ParallelizeDataflowNode.cpp</span></p>
+<p>Given a total unroll budget (e.g., 4), this pass distributes it across nodes proportionally to their computational complexity:</p>
+<pre><code><span class="cm">// Node A: complexity = 1000 ops, Node B: complexity = 200 ops</span>
+<span class="cm">// Total schedule complexity = 1000</span>
+<span class="cm">// Unroll factor = 4</span>
+
+nodeA_factor = <span class="num">1</span> + <span class="num">4</span> * <span class="num">1000</span> / <span class="num">1000</span> = <span class="num">5</span>   <span class="cm">// gets more parallelism</span>
+nodeB_factor = <span class="num">1</span> + <span class="num">4</span> * <span class="num">200</span>  / <span class="num">1000</span> = <span class="num">1</span>   <span class="cm">// stays sequential</span></code></pre>
+<p>Then, if <strong>correlation-aware</strong> mode is enabled, nodes that share the same buffer have their unroll factors synchronized to avoid misaligned access patterns.</p>
+
+<h3>9.3 LowerDataflow</h3>
+<p><strong>File:</strong> <span class="file">lib/Transforms/Dataflow/LowerDataflow.cpp</span></p>
+<p>Converts the functional IR to the structural IR in two steps:</p>
+<ol>
+  <li><strong>LowerDispatchToSchedule:</strong> For each <code>DispatchOp</code>, find all "live-in" values (values defined outside but used inside). These become the schedule's explicit operands.</li>
+  <li><strong>LowerTaskToNode:</strong> For each <code>TaskOp</code>, classify its live-in values by analyzing memory effects:
+    <ul>
+      <li>If only <strong>read</strong> → <code>input</code></li>
+      <li>If <strong>written</strong> → <code>output</code></li>
+      <li>If not a memref/stream → <code>param</code> (scalar)</li>
+    </ul>
+  </li>
+</ol>
+
+<h3>9.4 ComplexityAnalysis and CorrelationAnalysis</h3>
+<p><strong>File:</strong> <span class="file">lib/Dialect/HLS/Analysis.cpp</span></p>
+<p><strong>ComplexityAnalysis</strong> counts the total "work" in each node by recursively walking the IR:</p>
+<ul>
+  <li>Each primitive op (add, multiply, load, store) counts as 1</li>
+  <li>A loop multiplies the body count by the trip count</li>
+  <li>An if-else takes the maximum of both branches</li>
+</ul>
+
+<p><strong>CorrelationAnalysis</strong> finds which nodes share data and how their loop indices relate. If node A writes <code>buf[i*8+j]</code> and node B reads <code>buf[k*4+l]</code>, the analysis computes the mapping between (i,j) and (k,l), including scale factors. This lets the parallelization pass unroll both nodes in a coordinated way.</p>
+
+<!-- ============================================================ -->
+<h2 id="codegen">10. Code Generation: From MLIR to C++</h2>
+
+<p><strong>File:</strong> <span class="file">lib/Translation/EmitHLSCpp.cpp</span> (~2072 lines)</p>
+
+<p>After all 14 stages, the IR is a tree of <code>func.func</code> operations containing affine loops, memref loads/stores, and arithmetic. The emitter walks this IR and prints C++ text.</p>
+
+<h3>10.1 How It Works</h3>
+<p>The emitter uses the <strong>Visitor pattern</strong>: it has a <code>dispatchVisitor</code> function that looks at each operation's type and calls the appropriate <code>emitXxx()</code> method. For example:</p>
+<ul>
+  <li><code>affine.for</code> → <code>emitAffineFor()</code> → prints <code>for (int v0 = ...) {</code></li>
+  <li><code>affine.load</code> → <code>emitAffineLoad()</code> → prints <code>float v1 = array[i][j];</code></li>
+  <li><code>arith.mulf</code> → <code>emitBinary()</code> → prints <code>float v2 = v0 * v1;</code></li>
+  <li><code>hls.dataflow.stream</code> → <code>emitStreamChannel()</code> → prints <code>hls::stream&lt;float&gt; s;</code></li>
+</ul>
+
+<h3>10.2 Type Mapping</h3>
+<table>
+  <tr><th>MLIR Type</th><th>C++ Type</th></tr>
+  <tr><td><code>i8</code></td><td><code>int8_t</code> or <code>ap_int&lt;8&gt;</code></td></tr>
+  <tr><td><code>i16</code></td><td><code>int16_t</code> or <code>ap_int&lt;16&gt;</code></td></tr>
+  <tr><td><code>i32</code></td><td><code>int32_t</code> or <code>int</code></td></tr>
+  <tr><td><code>f32</code></td><td><code>float</code></td></tr>
+  <tr><td><code>hls.stream&lt;f32, 4&gt;</code></td><td><code>hls::stream&lt;float&gt;</code></td></tr>
+  <tr><td><code>vector&lt;4xf32&gt;</code></td><td><code>hls::vector&lt;float, 4&gt;</code></td></tr>
+  <tr><td><code>memref&lt;64x64xf32&gt;</code></td><td><code>float[64][64]</code> (as function parameter)</td></tr>
+</table>
+
+<h3>10.3 Pragma Emission</h3>
+<p>The emitter reads the directive attributes attached to ops and emits corresponding pragmas:</p>
+<ul>
+  <li><code>LoopDirectiveAttr{pipeline=true, targetII=1}</code> → <code>#pragma HLS pipeline II=1</code></li>
+  <li><code>FuncDirectiveAttr{dataflow=true}</code> → <code>#pragma HLS dataflow</code></li>
+  <li><code>PartitionLayoutAttr{[cyclic], [4]}</code> → <code>#pragma HLS array_partition variable=x cyclic factor=4 dim=1</code></li>
+  <li><code>MemoryKindAttr{bram_t2p}</code> → <code>#pragma HLS bind_storage variable=x type=ram_t2p impl=bram</code></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="endtoend">11. End-to-End Example: ResNet18</h2>
+
+<p>Let's trace how HIDA compiles a real model.</p>
+
+<h3>Step 1: PyTorch → MLIR</h3>
+<p>The user writes a Python script (<span class="file">samples/pytorch/resnet18/resnet18.py</span>) that uses Torch-MLIR to export the model:</p>
+<pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch_mlir
+
+model = torchvision.models.resnet18(pretrained=True)
+module = torch_mlir.compile(model, torch.randn(<span class="num">1</span>,<span class="num">3</span>,<span class="num">224</span>,<span class="num">224</span>),
+                            output_type=<span class="st">"TOSA"</span>)
+<span class="kw">print</span>(module)  <span class="cm"># outputs .mlir text</span></code></pre>
+
+<h3>Step 2: HIDA Optimization</h3>
+<pre><code>scalehls-opt resnet18.mlir \
+  -hida-pytorch-pipeline=<span class="st">"top-func=forward loop-tile-size=8 loop-unroll-factor=4"</span></code></pre>
+<p>This runs all 14 stages: TOSA simplification → Linalg fusion → Bufferization → Affine conversion → Loop fusion → Buffer placement → Tiling (8x8) → Local buffers → Dataflow extraction → Lowering → Multi-consumer/producer fixing → Parallelization (factor 4) → Memory optimization → Function conversion → Directive generation.</p>
+
+<h3>Step 3: C++ Emission</h3>
+<pre><code>| scalehls-translate -scalehls-emit-hlscpp -emit-vitis-directives > resnet18.cpp</code></pre>
+
+<h3>Step 4: What the Output Looks Like</h3>
+<p>The generated C++ has this structure (taken from the actual <span class="file">resnet18.cpp</span> output):</p>
+<pre><code><span class="cm">// Auto-generated by HIDA</span>
+<span class="kw">#include</span> &lt;hls_stream.h&gt;
+<span class="kw">#include</span> &lt;ap_int.h&gt;
+
+<span class="cm">// Node functions (one per dataflow stage)</span>
+<span class="kw">void</span> forward_node2(
+  <span class="kw">float</span> v22[<span class="num">512</span>][<span class="num">1000</span>],  <span class="cm">// DRAM weights</span>
+  <span class="kw">float</span> v23[<span class="num">8</span>][<span class="num">8</span>],       <span class="cm">// Local BRAM tile</span>
+  <span class="kw">int</span> v24, <span class="kw">int</span> v25       <span class="cm">// Tile indices</span>
+) {
+  <span class="cm">#pragma HLS inline</span>
+  <span class="kw">for</span> (<span class="kw">int</span> v26 = <span class="num">0</span>; v26 < <span class="num">8</span>; v26++) {
+    <span class="kw">for</span> (<span class="kw">int</span> v27 = <span class="num">0</span>; v27 < <span class="num">8</span>; v27 += <span class="num">2</span>) {  <span class="cm">// unrolled by 2</span>
+      <span class="cm">#pragma HLS pipeline II=1</span>
+      <span class="kw">float</span> v28 = v22[(v26+(v24*<span class="num">8</span>))][(v27+(v25*<span class="num">8</span>))]; <span class="cm">// Load from DRAM</span>
+      v23[v26][v27] = v28;                             <span class="cm">// Store to BRAM</span>
+      <span class="kw">float</span> v29 = v22[(v26+(v24*<span class="num">8</span>))][((v27+(v25*<span class="num">8</span>))+<span class="num">1</span>)];
+      v23[v26][(v27+<span class="num">1</span>)] = v29;
+    }
+  }
+}
+
+<span class="cm">// Top-level dataflow function</span>
+<span class="kw">void</span> forward_node0(
+  <span class="kw">float</span> v30[<span class="num">512</span>][<span class="num">1000</span>],  <span class="cm">// Weights (DRAM)</span>
+  <span class="kw">float</span> v31[<span class="num">1000</span>],        <span class="cm">// Bias (DRAM)</span>
+  <span class="kw">float</span> v32[<span class="num">512</span>],         <span class="cm">// Input features</span>
+  <span class="kw">float</span> v33[<span class="num">1000</span>]         <span class="cm">// Output</span>
+) {
+  <span class="kw">float</span> v34[<span class="num">1000</span>];         <span class="cm">// Accumulator</span>
+  <span class="cm">#pragma HLS array_partition variable=v34 cyclic factor=2 dim=1</span>
+  <span class="cm">#pragma HLS bind_storage variable=v34 type=ram_2p impl=lutram</span>
+
+  <span class="kw">for</span> (<span class="kw">int</span> v35 = <span class="num">0</span>; v35 < <span class="num">8000</span>; v35++) {
+    <span class="cm">#pragma HLS dataflow</span>        <span class="cm">// node2 and node1 run in parallel!</span>
+    <span class="kw">int</span> v36 = (v35 % <span class="num">125</span>);
+    <span class="kw">int</span> v37 = (v35 / <span class="num">125</span>);
+    <span class="kw">float</span> v38[<span class="num">8</span>][<span class="num">8</span>];           <span class="cm">// Tile buffer (BRAM)</span>
+    <span class="cm">#pragma HLS array_partition variable=v38 cyclic factor=2 dim=2</span>
+
+    forward_node2(v30, v38, v37, v36);        <span class="cm">// Load tile from DRAM</span>
+    forward_node1(v32, v38, v31, v34, v33, v37, v36); <span class="cm">// Compute on tile</span>
+  }
+}</code></pre>
+
+<div class="box green">
+  <span class="tag">What HIDA Automated Here</span>
+  <ul>
+    <li>Tiled the matrix multiply into 8x8 tiles (from the <code>loop-tile-size=8</code> option)</li>
+    <li>Created local BRAM buffers for tiles (<code>v38[8][8]</code>)</li>
+    <li>Applied <code>#pragma HLS dataflow</code> to run tile loading and computation in parallel</li>
+    <li>Applied <code>#pragma HLS pipeline II=1</code> to innermost loops</li>
+    <li>Applied <code>array_partition cyclic factor=2</code> to enable dual-port access</li>
+    <li>Unrolled the inner loop by 2 (from <code>loop-unroll-factor=4</code>)</li>
+    <li>Chose <code>ram_2p impl=lutram</code> for small buffers</li>
+  </ul>
+  All of this was fully automatic from a PyTorch model export.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="codebase">12. Codebase Map: Where Everything Lives</h2>
+
+<h3>12.1 If You Want to Understand the IR...</h3>
+<table>
+  <tr><th>Read This File</th><th>To Learn About</th></tr>
+  <tr><td><span class="file">include/scalehls/Dialect/HLS/HLSOps.td</span></td><td>All 21 operations — their arguments, results, traits, and assembly format</td></tr>
+  <tr><td><span class="file">include/scalehls/Dialect/HLS/HLSTypes.td</span></td><td>The 3 custom types: Stream, Axi, Bundle</td></tr>
+  <tr><td><span class="file">include/scalehls/Dialect/HLS/HLSAttributes.td</span></td><td>All 11 attributes (memory kind, directives, timing, etc.)</td></tr>
+  <tr><td><span class="file">lib/Dialect/HLS/HLS.cpp</span></td><td>How each op is verified, canonicalized, and folded (the "rules")</td></tr>
+  <tr><td><span class="file">test/Transforms/Dataflow/lower-dataflow.mlir</span></td><td>A real example of MLIR IR at the functional/structural dataflow level</td></tr>
+</table>
+
+<h3>12.2 If You Want to Understand the Pipeline...</h3>
+<table>
+  <tr><th>Read This File</th><th>To Learn About</th></tr>
+  <tr><td><span class="file">lib/Transforms/Passes.cpp</span> (lines 140-308)</td><td>The full 14-stage pipeline — every pass in order with options</td></tr>
+  <tr><td><span class="file">lib/Transforms/Dataflow/CreateDataflowFromLinalg.cpp</span></td><td>How HIDA identifies dataflow tasks from neural network operations</td></tr>
+  <tr><td><span class="file">lib/Transforms/Dataflow/LowerDataflow.cpp</span></td><td>How functional dataflow becomes structural dataflow</td></tr>
+  <tr><td><span class="file">lib/Transforms/Dataflow/ParallelizeDataflowNode.cpp</span></td><td>The intensity-aware and correlation-aware parallelization</td></tr>
+</table>
+
+<h3>12.3 If You Want to Understand the Output...</h3>
+<table>
+  <tr><th>Read This File</th><th>To Learn About</th></tr>
+  <tr><td><span class="file">lib/Translation/EmitHLSCpp.cpp</span></td><td>How MLIR is translated to C++ text — every op's emitter method</td></tr>
+  <tr><td><span class="file">samples/pytorch/resnet18/resnet18.cpp</span></td><td>A real, complete generated C++ output for ResNet18</td></tr>
+  <tr><td><span class="file">samples/pytorch/resnet18/resnet18.py</span></td><td>How to export a PyTorch model through Torch-MLIR</td></tr>
+</table>
+
+<h3>12.4 Complete Statistics</h3>
+<table>
+  <tr><th>Component</th><th>Count</th></tr>
+  <tr><td>C++ implementation files</td><td>57</td></tr>
+  <tr><td>Header/TableGen files</td><td>21</td></tr>
+  <tr><td>Custom operations</td><td>21</td></tr>
+  <tr><td>Custom types</td><td>3</td></tr>
+  <tr><td>Custom attributes</td><td>11</td></tr>
+  <tr><td>Compiler passes</td><td>~55</td></tr>
+  <tr><td>Pipeline stages</td><td>14</td></tr>
+  <tr><td>MLIR test files</td><td>42</td></tr>
+  <tr><td>Sample PyTorch models</td><td>5 (ResNet18, MobileNet, VGG16, YOLO, ZFNet)</td></tr>
+  <tr><td>Sample polybench benchmarks</td><td>11</td></tr>
+</table>
+
+<hr>
+
+<div class="box blue">
+  <span class="tag">Where to Go Next</span>
+  <p>Now that you understand how HIDA works, you're ready to understand StreamTensor — the next-generation compiler that replaces HIDA's memory-mapped buffers with streaming FIFOs. See <strong>streamtensor-plan.html</strong> for the full implementation plan.</p>
+</div>
+
+</div>
+</body>
+</html>
