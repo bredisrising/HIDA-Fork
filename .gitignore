@@ -2,6 +2,7 @@ build
 
 .vscode
 .env
+/mlir_venv
 
 **/tmp
 **/cpp_src
