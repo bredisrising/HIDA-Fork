@@ -1442,6 +1442,398 @@ bool hls::hasRuntimeAttr(Operation *op) {
 }
 
 //===----------------------------------------------------------------------===//
+// STKernelOp
+//===----------------------------------------------------------------------===//
+
+/// Custom parse for STKernelOp.
+/// Syntax: hls.st.kernel @name inputs(%a, %b : T1, T2)
+///         inputs_packed [true, false] results_packed [true]
+///         (%block_arg0, %block_arg1 : !hls.itensor<...>, ...) {
+///           ...
+///         } : (T1, T2) -> (T3)
+ParseResult STKernelOp::parse(OpAsmParser &parser, OperationState &result) {
+  StringAttr symName;
+  if (parser.parseSymbolName(symName, "sym_name", result.attributes))
+    return failure();
+
+  // Parse optional inputs.
+  SmallVector<OpAsmParser::UnresolvedOperand, 4> inputOperands;
+  SmallVector<Type, 4> inputTypes;
+  if (succeeded(parser.parseOptionalKeyword("inputs"))) {
+    if (parser.parseLParen())
+      return failure();
+    if (failed(parser.parseOptionalRParen())) {
+      if (parser.parseOperandList(inputOperands) || parser.parseColon() ||
+          parser.parseTypeList(inputTypes) || parser.parseRParen())
+        return failure();
+    }
+  }
+
+  // Parse optional output inits.
+  SmallVector<OpAsmParser::UnresolvedOperand, 4> outputInitOperands;
+  SmallVector<Type, 4> outputInitTypes;
+  if (succeeded(parser.parseOptionalKeyword("output_inits"))) {
+    if (parser.parseLParen())
+      return failure();
+    if (failed(parser.parseOptionalRParen())) {
+      if (parser.parseOperandList(outputInitOperands) || parser.parseColon() ||
+          parser.parseTypeList(outputInitTypes) || parser.parseRParen())
+        return failure();
+    }
+  }
+
+  // Parse optional attributes (inputsPacked, resultsPacked, etc.).
+  if (parser.parseOptionalAttrDictWithKeyword(result.attributes))
+    return failure();
+
+  // Parse result types.
+  SmallVector<Type, 4> resultTypes;
+  if (succeeded(parser.parseOptionalArrow())) {
+    if (parser.parseTypeList(resultTypes))
+      return failure();
+  }
+
+  // Resolve operands.
+  if (parser.resolveOperands(inputOperands, inputTypes, parser.getNameLoc(),
+                             result.operands) ||
+      parser.resolveOperands(outputInitOperands, outputInitTypes,
+                             parser.getNameLoc(), result.operands))
+    return failure();
+
+  // Set operand segment sizes.
+  result.addAttribute(
+      "operand_segment_sizes",
+      parser.getBuilder().getDenseI32ArrayAttr(
+          {static_cast<int32_t>(inputOperands.size()),
+           static_cast<int32_t>(outputInitOperands.size())}));
+
+  result.addTypes(resultTypes);
+
+  // Parse body region.
+  Region *body = result.addRegion();
+  if (parser.parseRegion(*body))
+    return failure();
+
+  // Ensure the region has a block.
+  if (body->empty())
+    body->emplaceBlock();
+
+  return success();
+}
+
+/// Custom print for STKernelOp.
+void STKernelOp::print(OpAsmPrinter &p) {
+  p << " @" << getSymName();
+
+  // Print inputs.
+  if (!getInputs().empty()) {
+    p << " inputs(";
+    p.printOperands(getInputs());
+    p << " : ";
+    llvm::interleaveComma(getInputs().getTypes(), p);
+    p << ")";
+  }
+
+  // Print output inits.
+  if (!getOutputInits().empty()) {
+    p << " output_inits(";
+    p.printOperands(getOutputInits());
+    p << " : ";
+    llvm::interleaveComma(getOutputInits().getTypes(), p);
+    p << ")";
+  }
+
+  // Print attributes (skip sym_name and operand_segment_sizes).
+  SmallVector<StringRef, 4> elidedAttrs = {"sym_name",
+                                           "operand_segment_sizes"};
+  p.printOptionalAttrDictWithKeyword((*this)->getAttrs(), elidedAttrs);
+
+  // Print result types.
+  if (getNumResults() > 0) {
+    p << " -> ";
+    llvm::interleaveComma(getResultTypes(), p);
+  }
+
+  // Print body.
+  p << " ";
+  p.printRegion(getBody(), /*printEntryBlockArgs=*/true,
+                /*printBlockTerminators=*/true);
+}
+
+LogicalResult STKernelOp::verify() {
+  // Verify result count matches yield operand count.
+  auto yield = getYieldOp();
+  if (yield.getNumOperands() != getNumResults())
+    return emitOpError("yield operand count (")
+           << yield.getNumOperands() << ") must match result count ("
+           << getNumResults() << ")";
+  return success();
+}
+
+STYieldOp STKernelOp::getYieldOp() {
+  return cast<STYieldOp>(getBody().front().getTerminator());
+}
+
+//===----------------------------------------------------------------------===//
+// STTaskOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult STTaskOp::verify() {
+  // Verify result count matches yield operand count.
+  auto yield = getYieldOp();
+  if (yield.getNumOperands() != getNumResults())
+    return emitOpError("yield operand count (")
+           << yield.getNumOperands() << ") must match result count ("
+           << getNumResults() << ")";
+  return success();
+}
+
+STYieldOp STTaskOp::getYieldOp() {
+  return cast<STYieldOp>(getBody().front().getTerminator());
+}
+
+//===----------------------------------------------------------------------===//
+// ITensorReadOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ITensorReadOp::verify() {
+  // The result tensor element type should be compatible with the itensor
+  // element type.
+  auto itensorType = getSource().getType().cast<ITensorType>();
+  auto resultType = getResult().getType().cast<RankedTensorType>();
+
+  if (itensorType.getElementType() != resultType.getElementType())
+    return emitOpError("result element type (")
+           << resultType.getElementType()
+           << ") must match itensor element type ("
+           << itensorType.getElementType() << ")";
+
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// ITensorWriteOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ITensorWriteOp::verify() {
+  // The value tensor element type should match the dest itensor element type.
+  auto itensorType = getDest().getType().cast<ITensorType>();
+  auto valueType = getValue().getType().cast<RankedTensorType>();
+
+  if (itensorType.getElementType() != valueType.getElementType())
+    return emitOpError("value element type (")
+           << valueType.getElementType()
+           << ") must match itensor element type ("
+           << itensorType.getElementType() << ")";
+
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// ITensorType
+//===----------------------------------------------------------------------===//
+
+/// Parse an ITensorType.
+/// Syntax: !hls.itensor<elementType, [elementShape], [iterTripCounts],
+///                       [iterStepSizes], iterMap>
+mlir::Type ITensorType::parse(mlir::AsmParser &parser) {
+  if (parser.parseLess())
+    return {};
+
+  // Parse element type.
+  mlir::Type elementType;
+  if (parser.parseType(elementType) || parser.parseComma())
+    return {};
+
+  // Parse element shape: [dim0, dim1, ...].
+  SmallVector<int64_t> elementShape;
+  if (parser.parseLSquare())
+    return {};
+  if (parser.parseOptionalRSquare()) {
+    // Non-empty list.
+    int64_t dim;
+    if (parser.parseInteger(dim))
+      return {};
+    elementShape.push_back(dim);
+    while (succeeded(parser.parseOptionalComma())) {
+      if (parser.parseInteger(dim))
+        return {};
+      elementShape.push_back(dim);
+    }
+    if (parser.parseRSquare())
+      return {};
+  }
+  if (parser.parseComma())
+    return {};
+
+  // Parse iter trip counts: [tc0, tc1, ...].
+  SmallVector<int64_t> iterTripCounts;
+  if (parser.parseLSquare())
+    return {};
+  if (parser.parseOptionalRSquare()) {
+    int64_t tc;
+    if (parser.parseInteger(tc))
+      return {};
+    iterTripCounts.push_back(tc);
+    while (succeeded(parser.parseOptionalComma())) {
+      if (parser.parseInteger(tc))
+        return {};
+      iterTripCounts.push_back(tc);
+    }
+    if (parser.parseRSquare())
+      return {};
+  }
+  if (parser.parseComma())
+    return {};
+
+  // Parse iter step sizes: [ss0, ss1, ...].
+  SmallVector<int64_t> iterStepSizes;
+  if (parser.parseLSquare())
+    return {};
+  if (parser.parseOptionalRSquare()) {
+    int64_t ss;
+    if (parser.parseInteger(ss))
+      return {};
+    iterStepSizes.push_back(ss);
+    while (succeeded(parser.parseOptionalComma())) {
+      if (parser.parseInteger(ss))
+        return {};
+      iterStepSizes.push_back(ss);
+    }
+    if (parser.parseRSquare())
+      return {};
+  }
+  if (parser.parseComma())
+    return {};
+
+  // Parse iteration map as AffineMapAttr (handles affine_map<...> syntax).
+  mlir::AffineMapAttr iterMapAttr;
+  if (parser.parseAttribute(iterMapAttr))
+    return {};
+  mlir::AffineMap iterMap = iterMapAttr.getValue();
+
+  if (parser.parseGreater())
+    return {};
+
+  return get(parser.getContext(), elementType, elementShape, iterTripCounts,
+             iterStepSizes, iterMap);
+}
+
+/// Print an ITensorType.
+void ITensorType::print(mlir::AsmPrinter &printer) const {
+  printer << "<";
+  printer.printType(getElementType());
+  printer << ", [";
+  llvm::interleaveComma(getElementShape(), printer);
+  printer << "], [";
+  llvm::interleaveComma(getIterTripCounts(), printer);
+  printer << "], [";
+  llvm::interleaveComma(getIterStepSizes(), printer);
+  printer << "], ";
+  printer.printAttribute(AffineMapAttr::get(getIterMap()));
+  printer << ">";
+}
+
+/// Verify the ITensorType.
+LogicalResult
+ITensorType::verify(function_ref<InFlightDiagnostic()> emitError,
+                    mlir::Type elementType, ArrayRef<int64_t> elementShape,
+                    ArrayRef<int64_t> iterTripCounts,
+                    ArrayRef<int64_t> iterStepSizes,
+                    mlir::AffineMap iterMap) {
+  // iterTripCounts and iterStepSizes must have the same size.
+  if (iterTripCounts.size() != iterStepSizes.size())
+    return emitError() << "iterTripCounts size (" << iterTripCounts.size()
+                       << ") must match iterStepSizes size ("
+                       << iterStepSizes.size() << ")";
+
+  // iterMap inputs must match the number of iteration dimensions.
+  if (static_cast<size_t>(iterMap.getNumInputs()) != iterTripCounts.size())
+    return emitError() << "iterMap inputs (" << iterMap.getNumInputs()
+                       << ") must match iteration rank ("
+                       << iterTripCounts.size() << ")";
+
+  // iterMap results must match the number of element dimensions.
+  if (static_cast<size_t>(iterMap.getNumResults()) != elementShape.size())
+    return emitError() << "iterMap results (" << iterMap.getNumResults()
+                       << ") must match element rank (" << elementShape.size()
+                       << ")";
+
+  // All trip counts must be positive.
+  for (auto [i, tc] : llvm::enumerate(iterTripCounts))
+    if (tc <= 0)
+      return emitError() << "iterTripCount[" << i << "] must be positive, got "
+                         << tc;
+
+  // All step sizes must be positive.
+  for (auto [i, ss] : llvm::enumerate(iterStepSizes))
+    if (ss <= 0)
+      return emitError() << "iterStepSize[" << i << "] must be positive, got "
+                         << ss;
+
+  // All element shape dimensions must be positive.
+  for (auto [i, dim] : llvm::enumerate(elementShape))
+    if (dim <= 0)
+      return emitError() << "elementShape[" << i
+                         << "] must be positive, got " << dim;
+
+  return success();
+}
+
+/// Compute the full data tensor shape. For each element dimension, the data
+/// shape is the element shape multiplied by the iteration coverage along that
+/// dimension.
+SmallVector<int64_t> ITensorType::getDataShape() const {
+  auto elemShape = getElementShape();
+  auto tripCounts = getIterTripCounts();
+
+  // Start with a copy of the element shape.
+  SmallVector<int64_t> dataShape(elemShape.begin(), elemShape.end());
+
+  // For each iteration dimension, the iteration map tells us which element
+  // dimension(s) it covers. The full data size along element dim j is:
+  //   elementShape[j] * (tripCount[i] where iterMap maps i -> j)
+  // For a simple identity map, data_shape[j] = elementShape[j] * tripCounts[j].
+  // We multiply each element dimension by the trip count of every iteration
+  // dimension that maps to it.
+  auto iterMap = getIterMap();
+  for (unsigned i = 0, e = tripCounts.size(); i < e; ++i) {
+    // For simple affine expressions like (d0, d1) -> (d0, d1), the result
+    // is a dimension expression referencing the i-th input.
+    auto expr = iterMap.getResult(i);
+    if (auto dimExpr = expr.dyn_cast<AffineDimExpr>()) {
+      // This result corresponds to iterMap dimension dimExpr.getPosition().
+      // But since we iterate over results, result[i] maps to element dim i.
+      // The trip count that covers this result dimension comes from the
+      // input dimension that the expression references.
+      unsigned iterDim = dimExpr.getPosition();
+      dataShape[i] = elemShape[i] * tripCounts[iterDim];
+    } else {
+      // For complex affine expressions, fall back to a conservative estimate.
+      dataShape[i] = elemShape[i] * tripCounts[i < tripCounts.size() ? i : 0];
+    }
+  }
+  return dataShape;
+}
+
+/// Return the total number of tiles (product of all trip counts).
+int64_t ITensorType::getTotalElements() const {
+  int64_t total = 1;
+  for (auto tc : getIterTripCounts())
+    total *= tc;
+  return total;
+}
+
+/// Check whether this ITensor is layout-compatible with another.
+bool ITensorType::isLayoutCompatible(ITensorType other) const {
+  return getElementType() == other.getElementType() &&
+         getElementShape() == other.getElementShape() &&
+         getIterTripCounts() == other.getIterTripCounts() &&
+         getIterStepSizes() == other.getIterStepSizes() &&
+         getIterMap() == other.getIterMap();
+}
+
+//===----------------------------------------------------------------------===//
 // Include tablegen classes
 //===----------------------------------------------------------------------===//
 

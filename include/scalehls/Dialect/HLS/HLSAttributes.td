@@ -194,4 +194,45 @@ def FuncDirectiveAttr : HLSAttr<"FuncDirective"> {
   }];
 }
 
+//===----------------------------------------------------------------------===//
+// StreamTensor attributes
+//===----------------------------------------------------------------------===//
+
+def KernelTimingAttr : HLSAttr<"KernelTiming"> {
+  let summary = "Kernel timing from vendor HLS profiling";
+  let description = [{
+    Stores timing information for a StreamTensor kernel obtained from vendor
+    HLS synthesis reports. Used by the LP FIFO sizing algorithm to compute
+    token accumulation rates between kernels.
+  }];
+  let parameters = (ins
+    "int64_t":$pipelineII,
+    "int64_t":$initialDelay,
+    "int64_t":$totalLatency
+  );
+
+  let mnemonic = "kernel_timing";
+  let assemblyFormat = [{
+    `<` `ii` `=` $pipelineII `,` `delay` `=` $initialDelay `,`
+    `latency` `=` $totalLatency `>`
+  }];
+}
+
+def FIFOSizingResultAttr : HLSAttr<"FIFOSizingResult"> {
+  let summary = "FIFO sizing result from LP solver";
+  let description = [{
+    Stores the result of the linear programming FIFO sizing algorithm.
+    Attached to ITensor FIFOs to specify their required depth.
+  }];
+  let parameters = (ins
+    "int64_t":$depth,
+    "int64_t":$maxTokens
+  );
+
+  let mnemonic = "fifo_sizing";
+  let assemblyFormat = [{
+    `<` `depth` `=` $depth `,` `max_tokens` `=` $maxTokens `>`
+  }];
+}
+
 #endif // SCALEHLS_DIALECT_HLS_HLSATTRIBUTES_TD

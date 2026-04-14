@@ -45,4 +45,62 @@ def BundleType : HLSType<"Bundle"> {
   let assemblyFormat = "`<` qualified($dataType) `,` $kind `>`";
 }
 
+//===----------------------------------------------------------------------===//
+// StreamTensor types
+//===----------------------------------------------------------------------===//
+
+def ITensorType : HLSType<"ITensor"> {
+  let summary = "An iteration tensor type for streaming dataflow";
+  let description = [{
+    Represents a streaming FIFO channel that transfers tiles of a tensor in a
+    prescribed iteration order. An ITensor encodes:
+    - elementType / elementShape: the type and shape of each tile transferred
+      per FIFO transaction (e.g., f32 / [16, 16] for 16x16 float tiles).
+    - iterTripCounts / iterStepSizes: for each iteration dimension, the number
+      of steps and the step size (derived from tiling loop bounds).
+    - iterMap: an AffineMap that maps iteration indices to data tensor
+      dimensions, describing the order in which tiles cover the full tensor.
+
+    Syntax:
+      !hls.itensor<elementType, [elementShape], [iterTripCounts],
+                    [iterStepSizes], iterMap>
+
+    Example:
+      !hls.itensor<f32, [16, 16], [4, 4], [16, 16],
+                    affine_map<(d0, d1) -> (d0, d1)>>
+  }];
+  let mnemonic = "itensor";
+
+  let parameters = (ins
+    "mlir::Type":$elementType,
+    ArrayRefParameter<"int64_t">:$elementShape,
+    ArrayRefParameter<"int64_t">:$iterTripCounts,
+    ArrayRefParameter<"int64_t">:$iterStepSizes,
+    "mlir::AffineMap":$iterMap
+  );
+
+  // AffineMap parameters cannot use auto-generated assemblyFormat.
+  let hasCustomAssemblyFormat = 1;
+  let genVerifyDecl = 1;
+
+  let extraClassDeclaration = [{
+    /// Return the number of iteration dimensions.
+    unsigned getIterRank() const { return getIterTripCounts().size(); }
+
+    /// Return the number of element (tile) dimensions.
+    unsigned getElementRank() const { return getElementShape().size(); }
+
+    /// Compute the full data tensor shape by multiplying element shape
+    /// dimensions by the corresponding trip counts through the iteration map.
+    llvm::SmallVector<int64_t> getDataShape() const;
+
+    /// Return the total number of tiles (product of all trip counts).
+    int64_t getTotalElements() const;
+
+    /// Check whether this ITensor is layout-compatible with another (all fields
+    /// match), meaning they can be directly connected via a FIFO.
+    bool isLayoutCompatible(ITensorType other) const;
+  }];
+}
+
 #endif // SCALEHLS_DIALECT_HLS_HLSTYPES_TD
