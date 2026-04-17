@@ -5,8 +5,9 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/IR/OpFoldResult.h"
+#include "mlir/Dialect/Utils/StaticValueUtils.h"
 #include "mlir/IR/AffineExpr.h"
+#include "mlir/IR/Matchers.h"
 
 using namespace mlir;
 using namespace scalehls;
@@ -16,6 +17,16 @@ namespace {
     struct ConvertLinalgToKernelPass : public ConvertLinalgToKernelBase<ConvertLinalgToKernelPass> {
         void runOnOperation() override {
             func::FuncOp func = getOperation();
+            func.walk([&](linalg::GenericOp generic) {
+                auto outerLoop = generic->getParentOfType<scf::ForOp>();
+                if (!outerLoop) return;
+
+                while (auto parent = outerLoop->getParentOfType<scf::ForOp>()) {
+                    outerLoop = parent;
+                }
+                IRRewriter rewriter(&getContext());
+                convertTiledLinalgToKernel(outerLoop, generic, rewriter);
+            });
         }
     
 
@@ -43,10 +54,13 @@ namespace {
             unsigned dimIdx = 0;
 
             for (scf::ForOp op : loopBand) {
-                int64_t lb, ub, step;
-                matchPattern(op.getLowerBound(), m_ConstantIndex(&lb));
-                matchPattern(op.getUpperBound(), m_ConstantIndex(&ub));
-                matchPattern(op.getStep(),       m_ConstantIndex(&step));
+                APInt lbAP, ubAP, stepAP;
+                matchPattern(op.getLowerBound(), m_ConstantInt(&lbAP));
+                matchPattern(op.getUpperBound(), m_ConstantInt(&ubAP));
+                matchPattern(op.getStep(),       m_ConstantInt(&stepAP));
+                int64_t lb = lbAP.getSExtValue();
+                int64_t ub = ubAP.getSExtValue();
+                int64_t step = stepAP.getSExtValue();
                 int64_t tripCount = (ub - lb) / step;
 
                 tripCounts.push_back(tripCount);
@@ -63,7 +77,7 @@ namespace {
         }
 
         void convertTiledLinalgToKernel(
-            scf::ForOp outerLoop, linalg::GenericOp generic, PatternRewriter &rewriter
+            scf::ForOp outerLoop, linalg::GenericOp generic, IRRewriter &rewriter
         ) {
             SmallVector<tensor::ExtractSliceOp> extracts;
             SmallVector<tensor::InsertSliceOp> inserts;
@@ -117,16 +131,25 @@ namespace {
             OpBuilder builder(outerLoop);
             Location loc = outerLoop.getLoc();
 
-            auto inputTensors = outerLoop->getOperands();
+            SmallVector<Value> inputTensors;
+            for (auto extract : extracts) {
+                inputTensors.push_back(extract.getSource());
+            }
+
             SmallVector<Value> outputInits;
+
+            for (auto insert : inserts) {
+                outputInits.push_back(insert.getDest());
+            }
 
             auto kernel = builder.create<STKernelOp>(
                 loc,
+                /*results=*/TypeRange{},
                 builder.getStringAttr("kernel"),
                 inputTensors,
                 outputInits,
-                nullptr,
-                nullptr
+                DenseBoolArrayAttr{},
+                DenseBoolArrayAttr{}
             );
 
             Block* kernelBlock = new Block();
@@ -135,7 +158,43 @@ namespace {
             }
             kernel.getBody().push_back(kernelBlock);
 
+            builder.setInsertionPointToStart(kernelBlock);
+            auto task = builder.create<STTaskOp>(
+                loc, /*results=*/TypeRange{},
+                /*sym_name=*/StringAttr{}, /*inits=*/ValueRange{},
+                /*kernel=*/true, /*dataDriven=*/false);
+
+            Block* taskBlock = new Block();
+            task.getBody().push_back(taskBlock);
+            builder.setInsertionPointToStart(taskBlock);
+
+            for (unsigned i = 0; i < extracts.size(); i++) {
+                Value itensorArg = kernelBlock->getArgument(i);
+                auto tileType = extracts[i].getResult().getType();
+                auto read = builder.create<ITensorReadOp>(loc, tileType, itensorArg, /*init=*/Value());
+
+                extracts[i].getResult().replaceAllUsesWith(read.getResult());
+            }
+
+            generic->moveBefore(taskBlock, taskBlock->end());
+
+            unsigned outputStart = extracts.size();
+            for (unsigned i = 0; i < inserts.size(); i++) {
+                Value itensorArg = kernelBlock->getArgument(outputStart + i);
+                Value tile = generic.getResult(i);
+                builder.create<ITensorWriteOp>(loc, itensorArg.getType(), tile, itensorArg);
+            }
+
+            builder.create<STYieldOp>(loc);
+
+            builder.setInsertionPointToEnd(kernelBlock);
+            builder.create<STYieldOp>(loc, outputInits);
             
+            rewriter.eraseOp(outerLoop);
         }
     };
+} // namespace
+
+std::unique_ptr<Pass> mlir::scalehls::createConvertLinalgToKernelPass() {
+    return std::make_unique<ConvertLinalgToKernelPass>();
 }

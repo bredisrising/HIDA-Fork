@@ -75,6 +75,18 @@ def ConvertDataflowToFunc :
   ];
 }
 
+def ConvertLinalgToKernel :
+      Pass<"scalehls-convert-linalg-to-kernel", "func::FuncOp"> {
+  let summary = "Convert tiled linalg ops to StreamTensor kernel IR";
+  let constructor = "mlir::scalehls::createConvertLinalgToKernelPass()";
+}
+
+def ConvertTensorToKernel :
+      Pass<"scalehls-convert-tensor-to-kernel", "func::FuncOp"> {
+  let summary = "Convert non-linalg tensor ops to StreamTensor pass-through kernels";
+  let constructor = "mlir::scalehls::createConvertTensorToKernelPass()";
+}
+
 def CreateDataflowFromAffine :
       Pass<"scalehls-create-dataflow-from-affine", "func::FuncOp"> {
   let summary = "Create dataflow hierarchy from affine loops";

@@ -48,6 +48,8 @@ std::unique_ptr<Pass> createBalanceDataflowNodePass();
 std::unique_ptr<Pass> createBufferizeDataflowPass();
 std::unique_ptr<Pass>
 createConvertDataflowToFuncPass(bool splitExternalAccess = true);
+std::unique_ptr<Pass> createConvertLinalgToKernelPass();
+std::unique_ptr<Pass> createConvertTensorToKernelPass();
 std::unique_ptr<Pass> createCreateDataflowFromTosaPass();
 std::unique_ptr<Pass> createCreateDataflowFromLinalgPass();
 std::unique_ptr<Pass> createCreateDataflowFromAffinePass();
