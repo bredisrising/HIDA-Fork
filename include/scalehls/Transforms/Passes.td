@@ -181,6 +181,51 @@ def StreamDataflowTask : Pass<"scalehls-stream-dataflow-task", "func::FuncOp"> {
 }
 
 //===----------------------------------------------------------------------===//
+// StreamTensor Passes (Phase 4)
+//===----------------------------------------------------------------------===//
+
+def ConvertEmptyToInstance :
+      Pass<"scalehls-convert-empty-to-instance", "func::FuncOp"> {
+  let summary = "Convert ITensorEmptyOp placeholders to ITensorInstanceOp";
+  let description = [{
+    After the itensor graph is structurally finalized, convert all placeholder
+    ITensorEmptyOp into concrete ITensorInstanceOp with a default depth of 2
+    (double-buffering: one tile produced while the previous is consumed).
+  }];
+  let constructor = "mlir::scalehls::createConvertEmptyToInstancePass()";
+}
+
+def EnsureITensorSingleUse :
+      Pass<"scalehls-ensure-itensor-single-use", "func::FuncOp"> {
+  let summary = "Ensure each itensor value has a single consumer";
+  let description = [{
+    For each itensor value with multiple consumers, insert an ITensorForkOp to
+    duplicate the stream, satisfying the single-consumer FIFO invariant.
+  }];
+  let constructor = "mlir::scalehls::createEnsureITensorSingleUsePass()";
+}
+
+def FoldITensor : Pass<"scalehls-fold-itensor", "func::FuncOp"> {
+  let summary = "Fold itensor FIFOs with matching access patterns";
+  let description = [{
+    When an ITensorWriteOp connects to an ITensorReadOp with exactly matching
+    access patterns (identical affine iter maps and shapes), eliminate the FIFO
+    and merge the producers/consumers into the same task.
+  }];
+  let constructor = "mlir::scalehls::createFoldITensorPass()";
+}
+
+def SimplifyTaskStructure :
+      Pass<"scalehls-simplify-task-structure", "func::FuncOp"> {
+  let summary = "Simplify ST task hierarchy";
+  let description = [{
+    Clean up the STTask hierarchy: remove empty tasks and inline single-yield
+    tasks whose itensor types are identical (no conversion needed).
+  }];
+  let constructor = "mlir::scalehls::createSimplifyTaskStructurePass()";
+}
+
+//===----------------------------------------------------------------------===//
 // Tensor-related Passes
 //===----------------------------------------------------------------------===//
 

@@ -66,6 +66,12 @@ std::unique_ptr<Pass>
 createScheduleDataflowNodePass(bool ignoreViolations = false);
 std::unique_ptr<Pass> createStreamDataflowTaskPass();
 
+/// StreamTensor Phase 4 passes.
+std::unique_ptr<Pass> createConvertEmptyToInstancePass();
+std::unique_ptr<Pass> createEnsureITensorSingleUsePass();
+std::unique_ptr<Pass> createFoldITensorPass();
+std::unique_ptr<Pass> createSimplifyTaskStructurePass();
+
 /// Tensor-related passes.
 std::unique_ptr<Pass> createConvertTensorToLinalgPass();
 std::unique_ptr<Pass> createLinalgAnalyzeModelPass();

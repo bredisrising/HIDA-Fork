@@ -14,6 +14,10 @@ add_mlir_library(MLIRScaleHLSTransforms
   Dataflow/PlaceDataflowBuffer.cpp
   Dataflow/ScheduleDataflowNode.cpp
   Dataflow/StreamDataflowTask.cpp
+  Dataflow/ConvertEmptyToInstance.cpp
+  Dataflow/EnsureITensorSingleUse.cpp
+  Dataflow/FoldITensor.cpp
+  Dataflow/SimplifyTaskStructure.cpp
 
   Directive/ArrayPartition.cpp
   Directive/CreateAxiInterface.cpp
