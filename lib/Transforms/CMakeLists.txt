@@ -17,6 +17,7 @@ add_mlir_library(MLIRScaleHLSTransforms
   Dataflow/ConvertEmptyToInstance.cpp
   Dataflow/EnsureITensorSingleUse.cpp
   Dataflow/FoldITensor.cpp
+  Dataflow/VectorizeITensor.cpp
   Dataflow/SimplifyTaskStructure.cpp
 
   Directive/ArrayPartition.cpp

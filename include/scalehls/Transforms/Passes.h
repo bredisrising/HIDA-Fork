@@ -70,6 +70,7 @@ std::unique_ptr<Pass> createStreamDataflowTaskPass();
 std::unique_ptr<Pass> createConvertEmptyToInstancePass();
 std::unique_ptr<Pass> createEnsureITensorSingleUsePass();
 std::unique_ptr<Pass> createFoldITensorPass();
+std::unique_ptr<Pass> createVectorizeITensorPass();
 std::unique_ptr<Pass> createSimplifyTaskStructurePass();
 
 /// Tensor-related passes.

@@ -225,6 +225,18 @@ def SimplifyTaskStructure :
   let constructor = "mlir::scalehls::createSimplifyTaskStructurePass()";
 }
 
+def VectorizeITensor :
+      Pass<"scalehls-vectorize-itensor", "func::FuncOp"> {
+  let summary = "Widen itensor element types to vector<N x T> for bandwidth";
+  let constructor = "mlir::scalehls::createVectorizeITensorPass()";
+
+  let options = [
+    Option<"vectorWidth", "vectorWidth", "unsigned", "4",
+      "Innermost dim packing factor (fallback when no IR attr present)">
+  ];
+}
+      
+
 //===----------------------------------------------------------------------===//
 // Tensor-related Passes
 //===----------------------------------------------------------------------===//
