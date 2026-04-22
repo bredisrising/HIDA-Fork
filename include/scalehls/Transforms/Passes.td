@@ -87,6 +87,12 @@ def ConvertTensorToKernel :
   let constructor = "mlir::scalehls::createConvertTensorToKernelPass()";
 }
 
+def PackKernelInterface :
+      Pass<"scalehls-pack-kernel-interface", "func::FuncOp"> {
+  let summary = "Insert tensor.pack/unpack at kernel boundaries for layout conversion";
+  let constructor = "mlir::scalehls::createPackKernelInterfacePass()";
+}
+
 def CreateDataflowFromAffine :
       Pass<"scalehls-create-dataflow-from-affine", "func::FuncOp"> {
   let summary = "Create dataflow hierarchy from affine loops";
