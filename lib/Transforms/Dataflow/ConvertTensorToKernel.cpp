@@ -11,8 +11,6 @@ using namespace hls;
 static void convertTensorOpToKernel(Operation *op, IRRewriter &rewriter) {
     
     MLIRContext *ctx = op->getContext();
-    
-    auto iterMap = AffineMap::getMultiDimIdentityMap(1, ctx);
 
     SmallVector<Value> inputs;
     for (auto v : op->getOperands()) {
@@ -32,7 +30,10 @@ static void convertTensorOpToKernel(Operation *op, IRRewriter &rewriter) {
         auto srcType = cast<RankedTensorType>(v.getType());
         auto elementType = srcType.getElementType();
         auto elementShape = SmallVector<int64_t>(srcType.getShape());
-
+        auto iterMap = AffineMap::get(/*dimCount=*/1, /*symCount=*/0,
+            SmallVector<AffineExpr>(elementShape.size(),
+                                    getAffineConstantExpr(0, ctx)),
+            ctx);
         types.push_back(ITensorType::get(ctx, elementType, elementShape, {1}, {1}, iterMap));
     }
 
@@ -40,7 +41,10 @@ static void convertTensorOpToKernel(Operation *op, IRRewriter &rewriter) {
         auto srcType = cast<RankedTensorType>(v.getType());
         auto elementType = srcType.getElementType();
         auto elementShape = SmallVector<int64_t>(srcType.getShape());
-
+        auto iterMap = AffineMap::get(/*dimCount=*/1, /*symCount=*/0,
+            SmallVector<AffineExpr>(elementShape.size(),
+                                    getAffineConstantExpr(0, ctx)),
+            ctx);
         types.push_back(ITensorType::get(ctx, elementType, elementShape, {1}, {1}, iterMap));
     }
 
@@ -73,14 +77,16 @@ static void convertTensorOpToKernel(Operation *op, IRRewriter &rewriter) {
     task.getBody().push_back(taskBlock);
     builder.setInsertionPointToStart(taskBlock);
 
+    // Create reads first (before op), then move op, then writes, then yield.
     for (unsigned i = 0; i < inputs.size(); i++) {
         auto read = builder.create<ITensorReadOp>(
-        loc, inputs[i].getType(), kernelBlock->getArgument(i), Value{});
-        inputs[i].replaceAllUsesWith(read.getResult());
+            loc, inputs[i].getType(), kernelBlock->getArgument(i), Value{});
+        op->replaceUsesOfWith(inputs[i], read.getResult());
     }
 
     op->moveBefore(taskBlock, taskBlock->end());
 
+    builder.setInsertionPointToEnd(taskBlock);
     for (unsigned i = 0; i < outputs.size(); i++) {
         unsigned outIdx = inputs.size() + i;
         builder.create<ITensorWriteOp>(

@@ -93,6 +93,17 @@ def PackKernelInterface :
   let constructor = "mlir::scalehls::createPackKernelInterfacePass()";
 }
 
+def WidenKernelInterface :
+      Pass<"scalehls-widen-kernel-interface", "func::FuncOp"> {
+  let summary = "Widen ITensor element types to vectors for maximum memory bandwidth";
+  let constructor = "mlir::scalehls::createWidenKernelInterfacePass()";
+
+  let options = [
+    Option<"busWidth", "bus-width", "unsigned", /*default=*/"512",
+           "Target AXI bus width in bits (e.g. 512 for DDR/HBM on Alveo)">
+  ];
+}
+
 def CreateDataflowFromAffine :
       Pass<"scalehls-create-dataflow-from-affine", "func::FuncOp"> {
   let summary = "Create dataflow hierarchy from affine loops";
