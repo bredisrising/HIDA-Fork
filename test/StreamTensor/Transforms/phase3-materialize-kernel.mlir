@@ -21,4 +21,5 @@ func.func @materialize_kernel(%input: tensor<64x64xf32>) {
   hls.st.kernel @conv inputs(%input : tensor<64x64xf32>) {
     hls.st.yield
   }
+  return
 }
