@@ -51,6 +51,9 @@ namespace {
             SmallVector<OpFoldResult> sizes = extract.getMixedSizes();
 
             SmallVector<int64_t> elementShape;
+
+            // TODO: Handle dynamic tile sizes
+
             for (auto s : sizes) {
                 auto cst = getConstantIntValue(s);
                 assert(cst && "dynamic tile sizes not supported yet");
