@@ -48,18 +48,30 @@ static void convertTensorOpToKernel(Operation *op, IRRewriter &rewriter) {
         types.push_back(ITensorType::get(ctx, elementType, elementShape, {1}, {1}, iterMap));
     }
 
+    // Kernel result types match the op's output tensor types so callers can
+    // use the kernel results in place of the original op results.
+    SmallVector<Type> kernelResultTypes;
+    for (Value v : outputs)
+        kernelResultTypes.push_back(v.getType());
+
     OpBuilder builder(op);
     Location loc = op->getLoc();
 
     auto kernel = builder.create<STKernelOp>(
         loc,
-        /*results=*/TypeRange{},
+        /*results=*/kernelResultTypes,
         builder.getStringAttr("kernel"),
         inputs,
         /*outputInits=*/ValueRange{},
         DenseBoolArrayAttr{},
         DenseBoolArrayAttr{}
     );
+
+    // Replace external uses BEFORE moving op into the kernel body.  At this
+    // point the only uses of op->getResult(i) are outside the kernel (e.g.
+    // "return %collapsed"), so replaceAllUsesWith is safe.
+    for (unsigned i = 0; i < outputs.size(); i++)
+        outputs[i].replaceAllUsesWith(kernel.getResult(i));
 
     Block* kernelBlock = new Block();
     for (auto itensorType : types) {
@@ -97,8 +109,17 @@ static void convertTensorOpToKernel(Operation *op, IRRewriter &rewriter) {
 
     builder.create<STYieldOp>(loc);
 
+    // In the kernel body (after the task), read each output ITensor back to
+    // tensor and yield them so callers can use the kernel results.
     builder.setInsertionPointToEnd(kernelBlock);
-    builder.create<STYieldOp>(loc);
+    SmallVector<Value> kernelYields;
+    for (unsigned i = 0; i < outputs.size(); i++) {
+        unsigned outIdx = inputs.size() + i;
+        auto read = builder.create<ITensorReadOp>(
+            loc, outputs[i].getType(), kernelBlock->getArgument(outIdx), Value{});
+        kernelYields.push_back(read.getResult());
+    }
+    builder.create<STYieldOp>(loc, kernelYields);
 }
 
 namespace {
