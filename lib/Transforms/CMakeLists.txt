@@ -63,4 +63,9 @@ add_mlir_library(MLIRScaleHLSTransforms
 
   LINK_LIBS PUBLIC
   MLIRHLS
+  MLIRArithDialect
+  MLIRLinalgDialect
+  MLIRLinalgUtils
+  MLIRTensorDialect
+  MLIRTensorUtils
   )
