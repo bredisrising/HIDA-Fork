@@ -57,6 +57,9 @@ def AnyITensor : Type<
     "mlir::scalehls::hls::ITensorType"
 >;
 
+// itensor payload: tile (pre-vectorize) or vector token (post-vectorize)
+def TensorOrVector : AnyTypeOf<[AnyRankedTensor, AnyVectorOfAnyRank]>;
+
 //===----------------------------------------------------------------------===//
 // High Dataflow Operations
 //===----------------------------------------------------------------------===//
@@ -644,8 +647,8 @@ def ITensorReadOp : HLSOp<"itensor.read", [Pure]> {
     Returns a tensor containing the tile data.
   }];
 
-  let arguments = (ins AnyITensor:$source, Optional<AnyRankedTensor>:$init);
-  let results = (outs AnyRankedTensor:$result);
+  let arguments = (ins AnyITensor:$source, Optional<TensorOrVector>:$init);
+  let results = (outs TensorOrVector:$result);
   let assemblyFormat = [{
     $source (`,` $init^ `:` type($init))? attr-dict `:` type($source) `->` type($result)
   }];
@@ -662,7 +665,7 @@ def ITensorWriteOp : HLSOp<"itensor.write", [Pure,
     The result type matches the dest type.
   }];
 
-  let arguments = (ins AnyRankedTensor:$value, AnyITensor:$dest);
+  let arguments = (ins TensorOrVector:$value, AnyITensor:$dest);
   let results = (outs AnyITensor:$result);
   let assemblyFormat = [{
     $value `into` $dest attr-dict `:` type($value) `into` type($dest)

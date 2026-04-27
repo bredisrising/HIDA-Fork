@@ -153,7 +153,14 @@ namespace {
                 }
                 if (unsupported) continue;
 
-                // writes -> reads -> instance (instance last keeps types valid)
+                // instance first so writes/reads see the new type when we
+                // build their loops (block-arg types come from the iter_arg
+                // init's type at create-time).
+                rewriter.setInsertionPoint(instOp);
+                auto newInst = rewriter.create<ITensorInstanceOp>(
+                    instOp.getLoc(), newType, instOp.getDepth());
+                rewriter.replaceOp(instOp, newInst.getResult());
+
                 for (auto w : writes) {
                     rewriter.setInsertionPoint(w);
                     rewriter.replaceOp(w, buildPackLoop(w, newType));
@@ -162,10 +169,6 @@ namespace {
                     rewriter.setInsertionPoint(rd);
                     rewriter.replaceOp(rd, buildUnpackLoop(rd, newType));
                 }
-                rewriter.setInsertionPoint(instOp);
-                auto newInst = rewriter.create<ITensorInstanceOp>(
-                    instOp.getLoc(), newType, instOp.getDepth());
-                rewriter.replaceOp(instOp, newInst.getResult());
             }
         }
     };

@@ -1597,14 +1597,21 @@ STYieldOp STTaskOp::getYieldOp() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult ITensorReadOp::verify() {
-  // The result tensor element type should be compatible with the itensor
-  // element type.
   auto itensorType = getSource().getType().cast<ITensorType>();
-  auto resultType = getResult().getType().cast<RankedTensorType>();
+  auto resultType = getResult().getType();
 
-  if (itensorType.getElementType() != resultType.getElementType())
+  // result is either a tile (tensor) or a single token (vector)
+  Type resultElem;
+  if (auto t = resultType.dyn_cast<RankedTensorType>())
+    resultElem = t.getElementType();
+  else if (auto v = resultType.dyn_cast<VectorType>())
+    resultElem = v;
+  else
+    return emitOpError("result must be a ranked tensor or a vector");
+
+  if (itensorType.getElementType() != resultElem)
     return emitOpError("result element type (")
-           << resultType.getElementType()
+           << resultElem
            << ") must match itensor element type ("
            << itensorType.getElementType() << ")";
 
@@ -1616,13 +1623,21 @@ LogicalResult ITensorReadOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult ITensorWriteOp::verify() {
-  // The value tensor element type should match the dest itensor element type.
   auto itensorType = getDest().getType().cast<ITensorType>();
-  auto valueType = getValue().getType().cast<RankedTensorType>();
+  auto valueType = getValue().getType();
 
-  if (itensorType.getElementType() != valueType.getElementType())
+  // value is either a tile (tensor) or a single token (vector)
+  Type valueElem;
+  if (auto t = valueType.dyn_cast<RankedTensorType>())
+    valueElem = t.getElementType();
+  else if (auto v = valueType.dyn_cast<VectorType>())
+    valueElem = v;
+  else
+    return emitOpError("value must be a ranked tensor or a vector");
+
+  if (itensorType.getElementType() != valueElem)
     return emitOpError("value element type (")
-           << valueType.getElementType()
+           << valueElem
            << ") must match itensor element type ("
            << itensorType.getElementType() << ")";
 
