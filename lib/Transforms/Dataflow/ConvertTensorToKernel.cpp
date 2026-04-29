@@ -26,27 +26,26 @@ static void convertTensorOpToKernel(Operation *op, IRRewriter &rewriter) {
 
     SmallVector<ITensorType> types;
 
-    for (Value v : inputs) {
-        auto srcType = cast<RankedTensorType>(v.getType());
+    auto makePassThroughITensor = [&](RankedTensorType srcType) -> ITensorType {
         auto elementType = srcType.getElementType();
         auto elementShape = SmallVector<int64_t>(srcType.getShape());
-        auto iterMap = AffineMap::get(/*dimCount=*/1, /*symCount=*/0,
-            SmallVector<AffineExpr>(elementShape.size(),
-                                    getAffineConstantExpr(0, ctx)),
-            ctx);
-        types.push_back(ITensorType::get(ctx, elementType, elementShape, {1}, {1}, iterMap));
-    }
+        unsigned rank = elementShape.size();
+        // One trip of 1 per dimension; step = full dimension size (whole tensor
+        // consumed in a single pass).  Identity map: (d0,...,dn) -> (d0,...,dn).
+        SmallVector<int64_t> tripCounts(rank, 1);
+        SmallVector<int64_t> stepSizes(elementShape);
+        SmallVector<AffineExpr> identityExprs;
+        for (unsigned j = 0; j < rank; j++)
+            identityExprs.push_back(getAffineDimExpr(j, ctx));
+        auto iterMap = AffineMap::get(rank, 0, identityExprs, ctx);
+        return ITensorType::get(ctx, elementType, elementShape, tripCounts, stepSizes, iterMap);
+    };
 
-    for (Value v : outputs) {
-        auto srcType = cast<RankedTensorType>(v.getType());
-        auto elementType = srcType.getElementType();
-        auto elementShape = SmallVector<int64_t>(srcType.getShape());
-        auto iterMap = AffineMap::get(/*dimCount=*/1, /*symCount=*/0,
-            SmallVector<AffineExpr>(elementShape.size(),
-                                    getAffineConstantExpr(0, ctx)),
-            ctx);
-        types.push_back(ITensorType::get(ctx, elementType, elementShape, {1}, {1}, iterMap));
-    }
+    for (Value v : inputs)
+        types.push_back(makePassThroughITensor(cast<RankedTensorType>(v.getType())));
+
+    for (Value v : outputs)
+        types.push_back(makePassThroughITensor(cast<RankedTensorType>(v.getType())));
 
     // Kernel result types match the op's output tensor types so callers can
     // use the kernel results in place of the original op results.

@@ -93,6 +93,12 @@ def PackKernelInterface :
   let constructor = "mlir::scalehls::createPackKernelInterfacePass()";
 }
 
+def MaterializeKernel :
+      Pass<"scalehls-materialize-kernel", "func::FuncOp"> {
+  let summary = "Materialize implicit DMA tasks at kernel boundaries";
+  let constructor = "mlir::scalehls::createMaterializeKernelPass()";
+}
+
 def WidenKernelInterface :
       Pass<"scalehls-widen-kernel-interface", "func::FuncOp"> {
   let summary = "Widen ITensor element types to vectors for maximum memory bandwidth";

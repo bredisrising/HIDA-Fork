@@ -50,6 +50,7 @@ std::unique_ptr<Pass>
 createConvertDataflowToFuncPass(bool splitExternalAccess = true);
 std::unique_ptr<Pass> createConvertLinalgToKernelPass();
 std::unique_ptr<Pass> createConvertTensorToKernelPass();
+std::unique_ptr<Pass> createMaterializeKernelPass();
 std::unique_ptr<Pass> createPackKernelInterfacePass();
 std::unique_ptr<Pass> createWidenKernelInterfacePass();
 std::unique_ptr<Pass> createCreateDataflowFromTosaPass();

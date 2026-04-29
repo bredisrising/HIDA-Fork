@@ -8,6 +8,7 @@
 #include "mlir/Dialect/Utils/StaticValueUtils.h"
 #include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/Matchers.h"
+#include <optional>
 
 using namespace mlir;
 using namespace scalehls;
@@ -39,75 +40,72 @@ namespace {
         }
     
 
-        ITensorType inferITensorType (
+        std::optional<ITensorType> inferITensorType(
             SmallVectorImpl<scf::ForOp> &loopBand, tensor::ExtractSliceOp extract
         ) {
-
             MLIRContext *ctx = extract.getContext();
-
             auto srcType = cast<RankedTensorType>(extract.getResult().getType());
             Type elementType = srcType.getElementType();
 
-            SmallVector<OpFoldResult> sizes = extract.getMixedSizes();
-
             SmallVector<int64_t> elementShape;
-
-            // TODO: Handle dynamic tile sizes
-
-            for (auto s : sizes) {
+            for (auto s : extract.getMixedSizes()) {
                 auto cst = getConstantIntValue(s);
-                assert(cst && "dynamic tile sizes not supported yet");
+                if (!cst) {
+                    extract.emitWarning("dynamic tile sizes not supported; skipping kernel conversion");
+                    return std::nullopt;
+                }
                 elementShape.push_back(*cst);
             }
 
-
             SmallVector<int64_t> tripCounts, stepSizes;
-            SmallVector<AffineExpr> dimExprs;
-            unsigned dimIdx = 0;
-
             for (scf::ForOp op : loopBand) {
                 APInt lbAP, ubAP, stepAP;
                 matchPattern(op.getLowerBound(), m_ConstantInt(&lbAP));
                 matchPattern(op.getUpperBound(), m_ConstantInt(&ubAP));
                 matchPattern(op.getStep(),       m_ConstantInt(&stepAP));
-                int64_t lb = lbAP.getSExtValue();
-                int64_t ub = ubAP.getSExtValue();
+                int64_t lb   = lbAP.getSExtValue();
+                int64_t ub   = ubAP.getSExtValue();
                 int64_t step = stepAP.getSExtValue();
-                int64_t tripCount = (ub - lb) / step;
-
-                tripCounts.push_back(tripCount);
+                tripCounts.push_back((ub - lb) / step);
                 stepSizes.push_back(step);
-                dimExprs.push_back(getAffineDimExpr(dimIdx++, ctx));
+            }
 
-            }     
-            
-            AffineMap iterMap = AffineMap::get(loopBand.size(), 0, dimExprs, ctx);
+            // Derive iterMap from the extract_slice offsets.
+            // For each tensor dimension, find which loop IV produced that offset.
+            // If offset == loopBand[j].iv, result j maps to that loop's dim index.
+            // Constant or unrecognized offsets fall back to constant 0 (broadcast /
+            // loop-invariant dimension).
+            SmallVector<AffineExpr> mapResults;
+            for (auto &off : extract.getMixedOffsets()) {
+                Value v = off.dyn_cast<Value>();
+                bool matched = false;
+                if (v) {
+                    for (unsigned j = 0; j < loopBand.size(); j++) {
+                        if (v == loopBand[j].getInductionVar()) {
+                            mapResults.push_back(getAffineDimExpr(j, ctx));
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+                if (!matched)
+                    mapResults.push_back(getAffineConstantExpr(0, ctx));
+            }
 
+            AffineMap iterMap = AffineMap::get(loopBand.size(), 0, mapResults, ctx);
             return ITensorType::get(ctx, elementType, elementShape, tripCounts, stepSizes, iterMap);
-            
-
         }
 
         void convertTiledLinalgToKernel(
             scf::ForOp outerLoop, linalg::GenericOp generic, IRRewriter &rewriter
         ) {
             SmallVector<tensor::ExtractSliceOp> extracts;
-            SmallVector<tensor::InsertSliceOp> inserts;
 
             for (Value op : generic.getInputs()) {
                 auto extract = op.getDefiningOp<tensor::ExtractSliceOp>();
                 if (!extract) continue;
 
                 extracts.push_back(extract);
-            }
-
-            for (Value result : generic.getResults()) {
-                for (Operation* user : result.getUsers()) {
-                    auto insert = dyn_cast<tensor::InsertSliceOp>(user);
-                    if (!insert) continue;
-
-                    inserts.push_back(insert);
-                }
             }
 
             SmallVector<scf::ForOp> loopBand;
@@ -138,13 +136,17 @@ namespace {
             SmallVector<ITensorType> types;
 
             for (auto extract : extracts) {
-                types.push_back(inferITensorType(loopBand, extract));
+                auto t = inferITensorType(loopBand, extract);
+                if (!t) return;
+                types.push_back(*t);
             }
 
             // Output types are inferred from the linalg.generic's outs operands
             // (each should be an extract_slice of the destination tensor).
             for (auto extract : outputExtracts) {
-                types.push_back(inferITensorType(loopBand, extract));
+                auto t = inferITensorType(loopBand, extract);
+                if (!t) return;
+                types.push_back(*t);
             }
 
             OpBuilder builder(outerLoop);
@@ -214,7 +216,7 @@ namespace {
             generic->moveBefore(taskBlock, taskBlock->end());
 
             builder.setInsertionPointToEnd(taskBlock);
-            for (unsigned i = 0; i < inserts.size(); i++) {
+            for (unsigned i = 0; i < outputExtracts.size(); i++) {
                 Value itensorArg = kernelBlock->getArgument(outputStart + i);
                 Value tile = generic.getResult(i);
                 builder.create<ITensorWriteOp>(loc, itensorArg.getType(), tile, itensorArg);
